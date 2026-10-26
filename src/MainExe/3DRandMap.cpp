@@ -30,7 +30,7 @@
 #include "mode.h"
 #include "Sort.h"
 #include "Curve.h"
-#include "Process.h"
+#include "ProcessInfo.h"
 #include "3DRandmap.h"
 #include "bmptool.h"
 #include "GP_Draw.h"

@@ -8,7 +8,9 @@
 #include <stdarg.h>
 
 #ifdef _WIN32
-    // On Windows, use native types
+    // On Windows, use native types. Winsock2 must come before windows.h, which otherwise pulls in
+    // the legacy winsock.h and clashes with platform.cpp's later <Winsock2.h>.
+    #include <winsock2.h>
     #include <windows.h>
 #else
 

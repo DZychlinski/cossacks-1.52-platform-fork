@@ -21,7 +21,12 @@ if(WIN32 AND NOT MSVC)
 endif()
 
 add_library(platform_compat STATIC ${PLATFORM_SOURCES} ${PLATFORM_HEADERS})
-target_include_directories(platform_compat PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# This folder holds stand-ins named like Win32 SDK headers (windows.h, crtdbg.h, ...) that forward
+# with #include_next. MSVC has no #include_next and must see the real SDK headers, so the folder
+# is not put on the include path there; quoted includes from platform.cpp still resolve locally.
+if(NOT MSVC)
+    target_include_directories(platform_compat PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 
 if(WIN32)
     target_link_libraries(platform_compat PRIVATE ws2_32 iphlpapi advapi32)

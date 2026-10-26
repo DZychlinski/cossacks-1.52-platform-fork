@@ -505,7 +505,7 @@
     <ClInclude Include="Pinger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Process.h">
+    <ClInclude Include="ProcessInfo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Realwater.h">

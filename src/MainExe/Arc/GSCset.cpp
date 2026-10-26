@@ -16,13 +16,17 @@
 // The public CGSCset interface is unchanged, so ResFile.cpp (R*), GP_Draw (gMapFile) and
 // Interface (gFindFirst *.m3d map lists) keep working verbatim.
 
-#include "platform.h"
+#include "../../platform/platform.h"
 #include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#ifdef _MSC_VER
+#include <direct.h>
+#define mkdir(path, mode) _mkdir(path)
+#endif
 #include "GSCtypes.h"
 #include "GSCarch.h"
 #include "GSCset.h"

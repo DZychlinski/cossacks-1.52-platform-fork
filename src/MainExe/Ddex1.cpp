@@ -241,7 +241,9 @@ static void _dmcr_sigabrt_handler(int sig) {
 	_exit(99);
 }
 
+#ifndef _MSC_VER
 __attribute__((constructor(101)))
+#endif
 static void _dmcr_early_init(void) {
 	_dmcr_get_exe_dir();
 	SetUnhandledExceptionFilter(_dmcr_exception_filter);
@@ -258,6 +260,11 @@ static void _dmcr_early_init(void) {
 	}
 	atexit(_dmcr_atexit_handler);
 }
+#ifdef _MSC_VER
+// MSVC equivalent of constructor(101): .CRT$XCT runs before the .CRT$XCU user constructors.
+#pragma section(".CRT$XCT", read)
+__declspec(allocate(".CRT$XCT")) static void (__cdecl* _dmcr_early_init_ptr)(void) = _dmcr_early_init;
+#endif
 #endif
 
 // Debug log file for startup diagnostics

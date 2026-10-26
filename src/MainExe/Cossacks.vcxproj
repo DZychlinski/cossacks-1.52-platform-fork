@@ -442,7 +442,7 @@
     <ClInclude Include="Path.h" />
     <ClInclude Include="Pinger.h" />
     <ClInclude Include="PlayerInfo.h" />
-    <ClInclude Include="Process.h" />
+    <ClInclude Include="ProcessInfo.h" />
     <ClInclude Include="queryreporting\Gqueryreporting.h" />
     <ClInclude Include="Realwater.h" />
     <ClInclude Include="Recorder.h" />

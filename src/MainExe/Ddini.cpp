@@ -14,6 +14,9 @@ extern void dbglog(const char* fmt, ...);
 #ifdef _WIN32
     #include <windows.h>
     #include <io.h>  // access(), F_OK on Windows/MinGW
+    #ifndef F_OK
+    #define F_OK 0   // MSVC's io.h has no F_OK
+    #endif
 #else
     #include "platform.h"
 #endif

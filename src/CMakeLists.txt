@@ -20,7 +20,7 @@ if(WIN32)
     else()
         message(STATUS "  Architecture: x86")
         set(COSSACKS_ARCH "x86")
-        add_definitions(-D_WIN32_WINNT=0x0501 -DWINVER=0x0501)  # Windows XP
+        add_definitions(-D_WIN32_WINNT=0x0601 -DWINVER=0x0601)  # Windows 7 (MSVC v143 cannot target XP)
     endif()
 elseif(APPLE)
     message(STATUS "Building for macOS")

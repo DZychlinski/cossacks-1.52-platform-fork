@@ -24,7 +24,7 @@
 #include "Megapolis.h"
 #pragma pack(4)
 #ifdef _MSC_VER
-#include "../CommCore library/CommCore.h"
+#include "../CommCore/CommCore.h"
 #else
 #include "CommCore.h"
 #endif
