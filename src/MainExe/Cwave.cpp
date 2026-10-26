@@ -12,6 +12,10 @@
 #include "windowsx.h"
 //#include "stdafx.h"
 #include "cwave.h"
+#ifdef _MSC_VER
+#include <stdio.h>
+#include "NativeData.h"
+#endif
 
 ///////////////////////////////////////////////////////////
 // CWave::CWave()
@@ -51,7 +55,24 @@ BOOL CWave::LoadWaveFile(char* fileName)
     long bytesRead;
 
     // Open the wave file.
+#ifdef _MSC_VER
+    // Native: the real mmioOpen resolves names against the exe folder; look in UserData, then the
+    // data folder (non-Windows builds do this inside the mmioOpen stand-in in platform/mmsystem.h).
+    char vp[600], rp[600];
+    const char* rel = fileName;
+    while (*rel == '.' || *rel == '\\' || *rel == '/') rel++;
+    snprintf(vp, sizeof vp, "/local/%s", rel);
+    cos_native_path(vp, rp, sizeof rp);
+    if (GetFileAttributesA(rp) == INVALID_FILE_ATTRIBUTES) {
+        snprintf(vp, sizeof vp, "/game/%s", rel);
+        for (char* c = vp; *c; c++) if (*c == '\\') *c = '/';
+        cos_native_path(vp, rp, sizeof rp);
+    }
+    for (char* c = rp; *c; c++) if (*c == '/') *c = '\\';
+    hMMIO = mmioOpen(rp, NULL, MMIO_READ | MMIO_ALLOCBUF);
+#else
     hMMIO = mmioOpen(fileName, NULL, MMIO_READ | MMIO_ALLOCBUF);
+#endif
     if (hMMIO == NULL)
         return FALSE;
 
