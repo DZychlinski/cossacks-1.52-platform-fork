@@ -1,3 +1,9 @@
+// Fork: optional expansion. TryUnit's CostPercent = the most a building may cost, as a share of the
+// current stockpile; without a return gate after it the script simply continues when it is too expensive.
+#define AI_OPTIONAL_CENTERS              5    // Town Centres 3..5 right after the 2-Town-Centre gate
+#define AI_OPTIONAL_CENTERS_COST_PERCENT 75
+#define AI_KAZ18_MAX                     1000 // 18c barracks: no practical count limit beyond the first 3
+#define AI_KAZ18_COST_PERCENT            30
 void DoFish(){
 	if(UpgIsRun(&XVIII)){
 		TryUnit(&PORT,1,100,100);
@@ -292,6 +298,7 @@ void WaterBuildings(){
 void Buildings(){
 	
 	TryUnit(&KAZ18, 3, 100, 100);
+	TryUnit(&KAZ18, AI_KAZ18_MAX, AI_KAZ18_COST_PERCENT, 100);
 
 /*	if(GetReadyUnits(&DIPCENTER)){
 		TryUnit(&MELN, 2, 100, 100);
@@ -310,6 +317,7 @@ void Buildings(){
 	TryUnit(&KUZNICA, 1, 100, 100);
 	TryUnit(&CENTER, 2, 100, 100);	
 	if(GetReadyUnits(&CENTER)<2 && GetStartRes()!=SR_1000) return;
+	TryUnit(&CENTER, AI_OPTIONAL_CENTERS, AI_OPTIONAL_CENTERS_COST_PERCENT, 100);
 
 	TryUnit(&KAZ17, 1, 100, 100);		
 	TryUnit(&AKADEMIA, 1, 100, 100);

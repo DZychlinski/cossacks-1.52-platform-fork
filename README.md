@@ -223,12 +223,35 @@ identifier in them appears in this source, so they were very likely built from i
 newer `Extraction.h` for reference (not built).
 
 The MSVC build compiles one DLL per nation (`src/AI/CMakeLists.txt`) into
-`src/out/build/win32-release/MainExe/Release/ai_rebuilt/`. The game still loads the shipped DLLs
-from `ai/`; the rebuilt ones are not used yet. The AI finds engine functions at runtime by name
+`src/out/build/win32-release/MainExe/Release/ai_rebuilt/`. With the CMake option
+`COS_USE_REBUILT_AI` (ON by default) the `AI_Deploy` step then copies them into `ai\` next to the
+exe, replacing the shipped DLLs for those 17 nations; Algeria, Turkey and Ukraine keep the shipped
+ones. To play against the shipped AI, configure with `-DCOS_USE_REBUILT_AI=OFF` (the shipped DLLs
+come back on the exe's next relink). The AI finds engine functions at runtime by name
 (`GetProcAddress(GetModuleHandle("DMCR.EXE"), ...)` in `Ai.h`), so the exe must keep the name
 `dmcr.exe`.
 
 The sources are Windows-1251 encoded; keep that encoding when editing them.
+
+### AI changes
+
+On land maps the AI runs `Extr00()` in `src/AI/Extraction.h` (the `LandScript…` functions in
+`Scripts.h` are never called). Its `Buildings()` is a fixed build order where each `return` stops
+everything below it until a condition is met; `TryUnit(type, max, costPercent, probability)` only
+proposes a building, which the engine accepts if the AI can pay in full and the price is at most
+`costPercent` of its current stockpile. A `TryUnit` without a following `return` is therefore
+optional: the AI builds it when it can afford it and otherwise carries on with the plan.
+
+| Change | Values (constants at the top of `Extraction.h`) |
+|---|---|
+| Town Centres 3–5 are optional right after the "2 Town Centres finished" gate (before: the 4th came late behind a gate, the 5th only after the 18th century and the Academy building upgrade) | up to `AI_OPTIONAL_CENTERS` = 5, at most `AI_OPTIONAL_CENTERS_COST_PERCENT` = 75% of the stockpile |
+| 18c barracks: no count limit beyond the original first 3 (before: max 3, later 6) | `AI_KAZ18_MAX` = 1000, at most `AI_KAZ18_COST_PERCENT` = 30% of the stockpile; each barracks costs twice the previous one, which limits them naturally |
+
+Houses are built by the engine, not the AI script (`City` logic in `src/MainExe/Megapolis.cpp`): a
+computer player adds a house when its free population capacity drops below a buffer that grows with
+population (7 places above 10 population … 60 above 80). The fork adds: above 500 population, keep
+at least 100 places free. This applies to every computer player, including the three nations
+without AI source.
 
 ## Changes from upstream
 
@@ -252,6 +275,9 @@ The sources are Windows-1251 encoded; keep that encoding when editing them.
 | `/local/...` (user files) maps to the exe folder instead of a `UserData\` subfolder | With `UserData\`, user files were split: `Gopen` (settings, `players.txt`) wrote to the exe folder but read from `UserData\`, and saves were written to `UserData\` but listed with `FindFirstFile("*.sav")` in the exe folder. So saves, options and the profile seemed lost on restart. The exe folder is also where the original game kept them. |
 | MSVC post-build step in `src/MainExe/CMakeLists.txt` (+ `src/cmake/copy_missing.cmake`) copies the SDL DLLs, `ai/` and `data_min/` next to the exe | The game switches to the exe folder at startup and opens these by relative path. See [Running](#running). |
 | Added the nation AI sources (`src/AI/`, AI Pack v0.995) and a CMake subproject building 17 AI DLLs into `ai_rebuilt/` (MSVC only; flags `/Zc:forScope-` for VC6 loop scoping, static CRT as originally, `/NODEFAULTLIB:..\dmcr.lib` for an obsolete pragma in `Ai.h`). No source edits. | Lets the AI be changed and rebuilt like the rest of the game. See [Nation AI sources](#nation-ai-sources). |
+| `COS_USE_REBUILT_AI` CMake option (ON) with an `AI_Deploy` target copying the rebuilt AI DLLs into `ai\` next to the exe | Plays against the AI built from source; it runs after `dmcr`'s post-build step, which copies the shipped `ai/` folder. |
+| `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile) and unlimited 18c barracks (≤30%) | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
+| `Megapolis.cpp`: computer players above 500 population keep at least 100 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
 
 ## Possible future work
 

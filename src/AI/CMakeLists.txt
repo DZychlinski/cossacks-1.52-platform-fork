@@ -38,4 +38,18 @@ foreach(AI_SRC ${AI_NATIONS})
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "$<TARGET_FILE_DIR:dmcr>/ai_rebuilt"
         RUNTIME_OUTPUT_DIRECTORY_DEBUG "$<TARGET_FILE_DIR:dmcr>/ai_rebuilt"
     )
+    list(APPEND AI_TARGETS AI_${AI_NAME})
 endforeach()
+
+# Deploy the rebuilt DLLs into ai/ next to the exe, replacing the shipped ones for these 17 nations
+# (Algeria, Turcia and Ukraine have no source and keep the shipped DLLs). Runs after dmcr, whose
+# post-build step copies the shipped ai/ folder, so the rebuilt DLLs always win. OFF = shipped AI;
+# dmcr's next relink then restores the shipped DLLs.
+option(COS_USE_REBUILT_AI "Play against the AI DLLs built from src/AI instead of the shipped ones" ON)
+if(COS_USE_REBUILT_AI)
+    add_custom_target(AI_Deploy ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_FILE_DIR:dmcr>/ai_rebuilt" "$<TARGET_FILE_DIR:dmcr>/ai"
+        COMMENT "Deploying rebuilt AI DLLs to ai/"
+        VERBATIM)
+    add_dependencies(AI_Deploy dmcr ${AI_TARGETS})
+endif()
