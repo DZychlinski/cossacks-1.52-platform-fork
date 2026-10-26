@@ -9,6 +9,7 @@ set(MAIN_SOURCES
     3DSurf.cpp
     ActiveScenary.cpp
     ActiveZone.cpp
+    AILog.cpp
     AntiBug.cpp
     ArchTool.cpp
     Arc/GSCarch.cpp
@@ -134,6 +135,12 @@ endif()
 add_executable(dmcr ${MAIN_SOURCES})
 
 # Tell SDL2 we handle our own entry point (WinMain/main)
+# Opt-in AI activity log (AILog.cpp): ai_logsi_<time>.log next to the exe, MSVC builds only.
+option(COS_AI_LOG "Write an AI activity log (what each AI built, upgraded, traded + per-minute economy snapshots)" OFF)
+if(COS_AI_LOG)
+    target_compile_definitions(dmcr PRIVATE COS_AI_LOG)
+endif()
+
 target_compile_definitions(dmcr PRIVATE SDL_MAIN_HANDLED)
 
 target_include_directories(dmcr PRIVATE

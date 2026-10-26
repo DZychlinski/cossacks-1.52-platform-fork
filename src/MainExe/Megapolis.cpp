@@ -1217,6 +1217,9 @@ void City::EnumProp()
 	};
 };
 
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
 #define FARMID 20
 word City::FindNeedProject()
 {
@@ -2418,6 +2421,9 @@ void City::ProcessCreation()
 					NewMonster* INM = IGO->newMons;
 					BPR.Index = IDX;
 					AddConstruction(OB);
+#ifdef AILOG_ENABLED
+					AILog_Event(Nat->NNUM, "BUILD %s", IGO->Message);
+#endif
 					int lNP = CreateTeamOfPeasants(Nat->NNUM, OB->RealX, OB->RealY, 2, 3);
 					if (lNP)
 					{
@@ -2452,6 +2458,9 @@ void City::ProcessCreation()
 								};
 							};
 							BPR.PlaceFound = true;
+#ifdef AILOG_ENABLED
+							AILog_Event(Nat->NNUM, "BUILD %s", IGO->Message);
+#endif
 							OneObject* OB = Group[IDX];
 							NewMonster* INM = IGO->newMons;
 							BPR.Index = IDX;
@@ -2596,6 +2605,9 @@ void City::ProcessCreation()
 						{
 							if (BPR.AttemptsToFindApprPlace > 4)
 							{
+#ifdef AILOG_ENABLED
+								AILog_Event(Nat->NNUM, "BUILD-FAIL %s (no place)", IGO->Message);
+#endif
 								PresentProject = false;
 								BPR.Used = false;
 							}
@@ -2604,6 +2616,9 @@ void City::ProcessCreation()
 								MarkUnusablePlace();
 								if (!FindApproximateBuildingPlace(IGO))
 								{
+#ifdef AILOG_ENABLED
+									AILog_Event(Nat->NNUM, "BUILD-FAIL %s (no place)", IGO->Message);
+#endif
 									PresentProject = false;
 									BPR.Used = false;
 								};

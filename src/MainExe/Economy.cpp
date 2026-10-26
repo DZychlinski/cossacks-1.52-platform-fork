@@ -10,6 +10,9 @@
 #include "walls.h"
 #include "Nature.h"
 #include <time.h>
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
 #include "Nucl.h"
 
 #include "Megapolis.h"
@@ -432,6 +435,12 @@ void Economy::PerformOperation( byte Nation, byte SellRes, byte BuyRes, int Sell
 
 	AddXRESRC( Nation, SellID, -SellAmount );
 	AddXRESRC( Nation, BuyID, BuyAmount );
+#ifdef AILOG_ENABLED
+	if (SellAmount > 0)
+	{
+		AILog_Event(Nation, "TRADE %d %s -> %d %s", SellAmount, AILog_ResName(SellID), BuyAmount, AILog_ResName(BuyID));
+	}
+#endif
 
 	NATIONS[Nation].ResBuy[BuyID] += BuyAmount;
 	NATIONS[Nation].ResSell[SellID] += SellAmount;

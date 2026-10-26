@@ -11,6 +11,9 @@
 #include "Nature.h"
 #include "NewUpgrade.h"
 #include "ConstStr.h"
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
 
 extern const int kSystemMessageDisplayTime;
 extern const int kMinorMessageDisplayTime;
@@ -68,6 +71,10 @@ void OneObject::PerformUpgrade( word NewU, word MakerID )
 		}
 	}
 
+#ifdef AILOG_ENABLED
+	// Started for real: resources are about to be paid. AI-only (AILog_Event ignores human nations).
+	AILog_Event(NNUM, "%s %s", newMons->Usage == MineID ? "MINE-UPGRADE" : "UPGRADE", NU->Message ? NU->Message : NU->Name);
+#endif
 	int Use = newMons->Usage;
 	for (int i = 0; i < 8; i++)
 	{

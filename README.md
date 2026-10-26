@@ -262,6 +262,26 @@ in use: the shipped DLLs never post these messages. The DLL calls the engine exp
 `AIReportProject` whenever `TryUnit` accepts a building project; the message is display only and
 does not affect the game.
 
+**AI activity log.** Configure with `-DCOS_AI_LOG=ON` (default OFF, MSVC only) to write one file per
+game, `ai_logs\ai_<YYYYMMDD-HHMMSS>.log` next to `dmcr.exe`, flushed after every line. Every line starts
+with the game time `mm:ss`, the nation index and `AI` or `HUMAN`. Events (computer players only):
+`BUILD` / `BUILD-FAIL` (building foundation placed / project abandoned), `UPGRADE` and `MINE-UPGRADE`
+(started), `TRADE` (market exchange, with the amount received). Every 60 s of game time each player,
+human included, gets a snapshot: stockpile (`RES`), gathered so far (`GATH`), population, houses,
+peasants, military and 18th century state (`POP`), gold/iron/coal mines with count, miners inside /
+capacity and upgrade levels (`MINE`), key buildings (`BLD`) and all finished buildings by name (`BLDN`),
+so the AI economy can be compared with the human's.
+
+```
+00:00 P1 AI    BUILD Town Centre
+03:12 P1 AI    BUILD Gold Mine
+04:05 P1 AI    MINE-UPGRADE Mine upgrade 1
+05:00 P1 AI    TRADE 500 wood -> 410 gold
+05:00 P1 AI    SNAP nation=Poland name=Computer
+05:00 P1 AI    MINE gold: mines=2 building=0 inside=11/20 levels=1,1,0,0,0,0,0,0 iron: mines=1 building=0 inside=4/10 levels=1,0,0,0,0,0,0,0 coal: mines=0 building=0 inside=0/0 levels=0,0,0,0,0,0,0,0
+05:00 P0 HUMAN RES  food=900 wood=1200 stone=300 gold=2100 iron=800 coal=100
+```
+
 ## Changes from upstream
 
 | Change | Why |
@@ -288,6 +308,7 @@ does not affect the game.
 | `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile), optional Storehouses 2–4 (≤50%), unlimited 18c barracks (≤90%), 18th century first and saved for earlier | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
 | `Megapolis.cpp`: computer players above 500 population keep at least 80 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
 | `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
+| `COS_AI_LOG` CMake option (OFF): `AILog.cpp` writes `ai_logsi_<time>.log` with the AI's builds, upgrades, trades and a per-minute economy snapshot of every player (hooks in `Megapolis.cpp`, `Upgrade.cpp`, `Economy.cpp`, `Ddex1.cpp`) | Answers why the AI gathers less gold and iron than the human. See **AI activity log** above. |
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
 | The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |
 

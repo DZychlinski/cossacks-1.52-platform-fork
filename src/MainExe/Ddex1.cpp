@@ -2773,6 +2773,10 @@ void ProcessMapAutosave();
 void ProcessGuard();
 void DecreaseVeruVPobedu();
 
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
+
 void PreDrawGameProcess()
 {
 	_hb("Pre:start");
@@ -2787,6 +2791,9 @@ void PreDrawGameProcess()
 
 	if (NOPAUSE)
 	{
+#ifdef AILOG_ENABLED
+		AILog_Tick();
+#endif
 		//Refresh "peasants in mines" amounts
 		for (int w = 0; w < 8; w++)
 		{
