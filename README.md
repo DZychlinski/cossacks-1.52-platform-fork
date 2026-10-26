@@ -206,8 +206,12 @@ looks for:
    to `cossacks_native.ini`.
 
 A folder is accepted when it contains `en\manifest.txt`. The language is `[Data] Language` in the same
-file (default `en`); files missing from that language fall back to `en`, as in the web build. Saves and
-options go to `UserData\` next to the exe, so the exe folder must be writable.
+file (default `en`); files missing from that language fall back to `en`, as in the web build.
+
+**User files.** As in the original game, saves (`*.sav`, including `AUTO.SAV`), settings (`mode2.dat`,
+`rec.dat`, `*.opt`), the player profile (`players.txt`) and generated random maps (`*.m3d`) are kept
+next to the exe, so the exe folder must be writable. Files there also take precedence over the data
+folder.
 
 ## Changes from upstream
 
@@ -225,9 +229,10 @@ options go to `UserData\` next to the exe, so the exe folder must be writable.
 | `MPlayerStub.cpp`: `DPL_CreatePlayer` stub returns `bool` | `Interface.cpp` declares it `bool`; MSVC includes the return type in the mangled name, so the `void` stub did not link. |
 | New `MainExe/NativeStubs.cpp` (MSVC only): inert IChat lobby/chat functions, IntExplorer access keys, and the web relay `cosn_*` functions | The native build does not compile IChat/IntExplorer or the JavaScript relay. The internet lobby is therefore unavailable natively; single-player, LAN and direct-IP play are unaffected. |
 | Windows builds no longer link `SDL2main`; MSVC builds a GUI-subsystem exe (`WIN32_EXECUTABLE`) | The game defines its own `WinMain` (`Ddex1.cpp`); `SDL2main` replaced it with a `main` that calls a nonexistent `SDL_main`. |
-| New `MainExe/NativeData.cpp`/`.h` (MSVC only): native `cos_data_init`, `cos_fetch_file`, `cos_persist_soon` and `cos_native_path`; `Arc/GSCset.cpp` and `DeviceCD.cpp` route their `/game/...`, `/local/...` and `/manifest.txt` paths through `cos_native_path` under `_MSC_VER` | In the web build those virtual paths and functions come from JavaScript (`web/cos_data.js`). The native loader maps them to the data folder and `UserData\` as described under **Game data lookup** above. Web and GCC/Clang code paths are unchanged. |
+| New `MainExe/NativeData.cpp`/`.h` (MSVC only): native `cos_data_init`, `cos_fetch_file`, `cos_persist_soon` and `cos_native_path`; `Arc/GSCset.cpp` and `DeviceCD.cpp` route their `/game/...`, `/local/...` and `/manifest.txt` paths through `cos_native_path` under `_MSC_VER` | In the web build those virtual paths and functions come from JavaScript (`web/cos_data.js`). The native loader maps them to the data folder and the exe folder as described under **Game data lookup** and **User files** above. Web and GCC/Clang code paths are unchanged. |
 | `ActiveScenary.cpp`: mission DLLs are loaded from the data folder (via `cos_native_path`) under `_MSC_VER` | The game passes data-relative names such as `Missions\...\x.dll`; natively `LoadLibrary` would look for them next to the exe. |
-| `Cwave.cpp`: sound effects are opened from `UserData\`, then the data folder (via `cos_native_path`) under `_MSC_VER` | The real Windows `mmioOpen` resolved `Sound\*.wav` against the exe folder, so no effect loaded (music, loaded through `DeviceCD.cpp`, was unaffected). Non-Windows builds already did this inside the `mmioOpen` stand-in in `platform/mmsystem.h`. |
+| `Cwave.cpp`: sound effects are opened from the exe folder, then the data folder (via `cos_native_path`) under `_MSC_VER` | The real Windows `mmioOpen` resolved `Sound\*.wav` against the exe folder only, so no effect loaded (music, loaded through `DeviceCD.cpp`, was unaffected). Non-Windows builds already did this inside the `mmioOpen` stand-in in `platform/mmsystem.h`. |
+| `/local/...` (user files) maps to the exe folder instead of a `UserData\` subfolder | With `UserData\`, user files were split: `Gopen` (settings, `players.txt`) wrote to the exe folder but read from `UserData\`, and saves were written to `UserData\` but listed with `FindFirstFile("*.sav")` in the exe folder. So saves, options and the profile seemed lost on restart. The exe folder is also where the original game kept them. |
 | MSVC post-build step in `src/MainExe/CMakeLists.txt` (+ `src/cmake/copy_missing.cmake`) copies the SDL DLLs, `ai/` and `data_min/` next to the exe | The game switches to the exe folder at startup and opens these by relative path. See [Running](#running). |
 
 ## Possible future work

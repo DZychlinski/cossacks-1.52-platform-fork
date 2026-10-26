@@ -3,7 +3,8 @@
 // The web build serves game files through virtual paths provided by JavaScript (web/cos_data.js):
 // /game/<canon>, /local/<canon>, /manifest.txt. Natively the same files live on disk:
 //   /game/X        -> <root>\<lang>\X, falling back to <root>\en\X
-//   /local/X       -> <exe dir>\UserData\X
+//   /local/X       -> <exe dir>\X  (as in the original game; Gopen writes, FindFirstFile("*.sav")
+//                     and other plain-fopen code paths also use the exe folder)
 //   /manifest.txt  -> <root>\<lang>\manifest.txt (fallback en)
 // The data root comes from cossacks_native.ini ([Data] DataDir), else <exe dir>\data, else a folder
 // picker. It is resolved lazily on first use because files are opened from static initialisers,
@@ -138,7 +139,7 @@ extern "C" const char* cos_native_path(const char* vpath, char* out, int n)
     }
     if (strncmp(vpath, "/local/", 7) == 0) {
         data_resolve();
-        snprintf(out, n, "%s\\UserData\\%s", g_exeDir, vpath + 7);
+        snprintf(out, n, "%s\\%s", g_exeDir, vpath + 7);
         return out;
     }
     if (strcmp(vpath, "/manifest.txt") == 0) {

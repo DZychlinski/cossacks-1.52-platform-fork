@@ -56,7 +56,7 @@ BOOL CWave::LoadWaveFile(char* fileName)
 
     // Open the wave file.
 #ifdef _MSC_VER
-    // Native: the real mmioOpen resolves names against the exe folder; look in UserData, then the
+    // Native: the real mmioOpen resolves names against the exe folder; look there (/local), then the
     // data folder (non-Windows builds do this inside the mmioOpen stand-in in platform/mmsystem.h).
     char vp[600], rp[600];
     const char* rel = fileName;
