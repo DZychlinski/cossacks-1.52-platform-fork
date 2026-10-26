@@ -73,6 +73,9 @@ void PlayRandomTrack();
 extern HWND hwnd;
 extern int CurrentNation, PlayMode;
 extern "C" int cos_fetch_file(const char* canon);  // lazy-fetch backend (cos_data.js): 0 ok, -1 absent
+#ifdef _MSC_VER
+#include "NativeData.h"
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 // Реализация CDeviceCD
@@ -141,7 +144,11 @@ static bool EnsureTrackLoaded(int idx, int trackNum)
         return chunkTracks[idx] != 0;
     }
 #else
+#ifdef _MSC_VER
+    { char rp[600]; chunkTracks[idx] = Mix_LoadWAV(cos_native_path(memfs, rp, sizeof rp)); }
+#else
     chunkTracks[idx] = Mix_LoadWAV(memfs);                  // decode via SDL_mixer/WebAudio
+#endif
     return chunkTracks[idx] != nullptr;
 #endif
 }

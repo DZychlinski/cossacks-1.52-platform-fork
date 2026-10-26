@@ -153,9 +153,21 @@ cmake --build out/build/win32-release --config Release
 
 The `.sln` files are not used: they target the VS 2015/2019 toolsets and do not include `platform/`.
 
-**Status:** all sources compile; the link step still misses the three web-only game-data functions
-(`cos_data_init`, `cos_fetch_file`, `cos_persist_soon`) used by `Arc/GSCset.cpp`. A native data
-loader reading the unpacked `data/<lang>/` tree is next.
+**Status:** `dmcr.exe` builds and links (`src/out/build/win32-release/MainExe/Release/dmcr.exe`).
+It has not been run yet. Not yet in the build output: the runtime files the exe needs next to it
+(`SDL2.dll`, `SDL2_mixer.dll`, `ai/`, ...).
+
+**Game data.** The exe reads the unpacked `data/<lang>/` tree of the web build (from the full source
+archive linked under [Building from Source](#building-from-source)). On first use it looks for:
+
+1. `[Data] DataDir` in `cossacks_native.ini` next to the exe;
+2. `data\` next to the exe;
+3. otherwise a folder picker asks for the data folder (the one containing `en\`) and saves the choice
+   to `cossacks_native.ini`.
+
+A folder is accepted when it contains `en\manifest.txt`. The language is `[Data] Language` in the same
+file (default `en`); files missing from that language fall back to `en`, as in the web build. Saves and
+options go to `UserData\` next to the exe, so the exe folder must be writable.
 
 ## Changes from upstream
 
@@ -172,6 +184,7 @@ loader reading the unpacked `data/<lang>/` tree is next.
 | `MPlayerStub.cpp`: `DPL_CreatePlayer` stub returns `bool` | `Interface.cpp` declares it `bool`; MSVC includes the return type in the mangled name, so the `void` stub did not link. |
 | New `MainExe/NativeStubs.cpp` (MSVC only): inert IChat lobby/chat functions, IntExplorer access keys, and the web relay `cosn_*` functions | The native build does not compile IChat/IntExplorer or the JavaScript relay. The internet lobby is therefore unavailable natively; single-player, LAN and direct-IP play are unaffected. |
 | Windows builds no longer link `SDL2main`; MSVC builds a GUI-subsystem exe (`WIN32_EXECUTABLE`) | The game defines its own `WinMain` (`Ddex1.cpp`); `SDL2main` replaced it with a `main` that calls a nonexistent `SDL_main`. |
+| New `MainExe/NativeData.cpp`/`.h` (MSVC only): native `cos_data_init`, `cos_fetch_file`, `cos_persist_soon` and `cos_native_path`; `Arc/GSCset.cpp` and `DeviceCD.cpp` route their `/game/...`, `/local/...` and `/manifest.txt` paths through `cos_native_path` under `_MSC_VER` | In the web build those virtual paths and functions come from JavaScript (`web/cos_data.js`). The native loader maps them to the data folder and `UserData\` as described under **Game data** above. Web and GCC/Clang code paths are unchanged. |
 
 ## Possible future work
 

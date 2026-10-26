@@ -26,6 +26,7 @@
 #ifdef _MSC_VER
 #include <direct.h>
 #define mkdir(path, mode) _mkdir(path)
+#include "../NativeData.h"
 #endif
 #include "GSCtypes.h"
 #include "GSCarch.h"
@@ -75,11 +76,19 @@ static unsigned char* cos_slurp(const char* canon, uint32_t* size)
     char p[600];
     FILE* f = NULL;
     snprintf(p, sizeof p, "/local/%s", canon);
+#ifdef _MSC_VER
+    { char rp[600]; f = fopen(cos_native_path(p, rp, sizeof rp), "rb"); }
+#else
     f = fopen(p, "rb");
+#endif
     if (!f) {
         if (cos_fetch_file(canon) == 0) {
             snprintf(p, sizeof p, "/game/%s", canon);
+#ifdef _MSC_VER
+            { char rp[600]; f = fopen(cos_native_path(p, rp, sizeof rp), "rb"); }
+#else
             f = fopen(p, "rb");
+#endif
         }
     }
     if (!f) { *size = 0; return NULL; }
@@ -102,7 +111,11 @@ static unsigned char* cos_slurp(const char* canon, uint32_t* size)
 static void cos_mkparents(char* path) // mkdir -p on the parent dirs of a /local/... path
 {
     for (char* q = path + 1; *q; q++) {
+#ifdef _MSC_VER
+        if (*q == '/' || *q == '\\') { char c = *q; *q = 0; mkdir(path, 0777); *q = c; }
+#else
         if (*q == '/') { *q = 0; mkdir(path, 0777); *q = '/'; }
+#endif
     }
 }
 
@@ -115,7 +128,12 @@ static void load_manifest()
 {
     if (g_names) return;
     g_names = (char**)calloc(1, sizeof(char*)); // non-NULL sentinel even on failure
+#ifdef _MSC_VER
+    char mp[600];
+    FILE* f = fopen(cos_native_path("/manifest.txt", mp, sizeof mp), "rb");
+#else
     FILE* f = fopen("/manifest.txt", "rb");
+#endif
     if (!f) return;
     fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
     if (sz <= 0) { fclose(f); return; }
@@ -177,8 +195,14 @@ LPGSCfile CGSCset::gWriteOpen(LPCSTR lpcsFileName)
 {
     char canon[512]; cos_canon(lpcsFileName, canon, sizeof canon);
     char p[600]; snprintf(p, sizeof p, "/local/%s", canon);
+#ifdef _MSC_VER
+    char rp[600]; cos_native_path(p, rp, sizeof rp);
+    cos_mkparents(rp);
+    FILE* f = fopen(rp, "wb");
+#else
     cos_mkparents(p);
     FILE* f = fopen(p, "wb");
+#endif
     if (!f) return NULL;
     LPGSCfile g = new TGSCfile;
     g->m_Flags = COS_WRITE; g->m_Position = 0; g->m_Arch = NULL;

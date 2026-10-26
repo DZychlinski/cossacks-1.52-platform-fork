@@ -107,7 +107,7 @@ if(WIN32)
     list(APPEND MAIN_SOURCES MPlayerStub.cpp)
     if(MSVC)
         # Inert stand-ins for the internet lobby (IChat/IntExplorer) and web relay functions
-        list(APPEND MAIN_SOURCES NativeStubs.cpp)
+        list(APPEND MAIN_SOURCES NativeStubs.cpp NativeData.cpp)
     endif()
 else()
     # macOS/Linux: needs both CommCore stub and SDL event bridge
