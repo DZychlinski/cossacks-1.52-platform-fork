@@ -5063,7 +5063,11 @@ extern "C" __declspec( dllexport ) void AIReportProject( GAMEOBJ* UnitType )
 	}
 	LastReport[NI][UnitType->Index] = now;
 	char msg[256];
-	sprintf( msg, "AI: building %s", GO->Message );
+	snprintf( msg, sizeof( msg ),
+		"AI: building %s | food %d wood %d stone %d gold %d iron %d coal %d | pop %d/%d",
+		GO->Message, XRESRC( NI, FoodID ), XRESRC( NI, TreeID ), XRESRC( NI, StoneID ),
+		XRESRC( NI, GoldID ), XRESRC( NI, IronID ), XRESRC( NI, CoalID ),
+		CNAT->NGidot, CNAT->NFarms );
 	CreateChatHint( msg, 16 + NatRefTBL[NI] );
 }
 

@@ -256,7 +256,8 @@ at least 80 places free. This applies to every computer player, including the th
 without AI source.
 
 **Debug chat.** Configure with `-DCOS_AI_DEBUG_CHAT=ON` (default OFF) to make the rebuilt AI announce
-its building decisions in the in-game chat, in its player colour: `AI: building <name>`, at most once
+its building decisions in the in-game chat, in its player colour: `AI: building <name> | food .. wood .. stone .. gold .. iron .. coal .. | pop <current>/<cap>`
+(its stockpile and population at that moment), at most once
 per building type and computer player every 20 seconds. It also proves the rebuilt DLLs are the ones
 in use: the shipped DLLs never post these messages. The DLL calls the engine export
 `AIReportProject` whenever `TryUnit` accepts a building project; the message is display only and
