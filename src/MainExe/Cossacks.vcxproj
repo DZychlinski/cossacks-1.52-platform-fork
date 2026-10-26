@@ -324,7 +324,7 @@
     <ClCompile Include="Motion.cpp" />
     <ClCompile Include="Mouse_X.cpp" />
     <ClCompile Include="MousZone.cpp" />
-    <ClCompile Include="MPlayer.cpp" />
+    <ClCompile Include="MPlayerStub.cpp" />
     <ClCompile Include="Multi.cpp" />
     <ClCompile Include="Nation.cpp" />
     <ClCompile Include="Nature.cpp" />

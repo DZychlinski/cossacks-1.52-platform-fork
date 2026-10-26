@@ -1,7 +1,8 @@
 // MPlayerStub.cpp — CommCore-based multiplayer (replaces DirectPlay MPlayer.cpp)
-// Used on: macOS, Linux, and Windows/MinGW builds
-// MSVC builds use MPlayer.cpp with DirectPlay
-#ifndef _MSC_VER
+// Used on all builds (the DirectPlay MPlayer.cpp is no longer compiled)
+#ifdef _WIN32
+#include <winsock2.h> // before ddini.h's windows.h, which would pull in the clashing legacy winsock.h
+#endif
 
 #include "ddini.h"
 #include "ResFile.h"
@@ -2144,8 +2145,6 @@ char* GetLString(DWORD dpid)
 
 // ========== DirectPlayLobbyCreateA stub ==========
 
-extern "C" HRESULT DirectPlayLobbyCreateA(LPGUID, LPDIRECTPLAYLOBBYA*, IUnknown*, void*, DWORD) {
+extern "C" HRESULT WINAPI DirectPlayLobbyCreateA(LPGUID, LPDIRECTPLAYLOBBYA*, IUnknown*, void*, DWORD) {
     return E_NOTIMPL;
 }
-
-#endif // !_MSC_VER

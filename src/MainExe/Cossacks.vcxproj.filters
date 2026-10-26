@@ -173,7 +173,7 @@
     <ClCompile Include="MousZone.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="MPlayer.cpp">
+    <ClCompile Include="MPlayerStub.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Multi.cpp">

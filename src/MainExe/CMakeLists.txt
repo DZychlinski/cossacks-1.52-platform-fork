@@ -99,13 +99,11 @@ set(MAIN_SOURCES
     ZBuffer.cpp
 )
 
-# MPlayer.cpp uses DirectPlay — only compile with MSVC (DirectPlay SDK available)
-# MinGW and non-Windows use MPlayerStub.cpp with CommCore UDP
+# All builds use MPlayerStub.cpp (CommCore UDP multiplayer with the 1.52 direct-IP rework).
+# The original DirectPlay MPlayer.cpp is no longer built: DirectPlay is a legacy Windows feature.
 # SdlEventBridge replaces Win32 message pump — only needed on non-Windows
-if(WIN32 AND MSVC)
-    list(APPEND MAIN_SOURCES MPlayer.cpp)
-elseif(WIN32)
-    # MinGW: has real Win32 API, only needs CommCore multiplayer stub
+if(WIN32)
+    # Windows (MSVC and MinGW): real Win32 API, only needs the CommCore multiplayer stub
     list(APPEND MAIN_SOURCES MPlayerStub.cpp)
 else()
     # macOS/Linux: needs both CommCore stub and SDL event bridge
@@ -177,7 +175,7 @@ if(WIN32)
         winmm ws2_32 iphlpapi advapi32 psapi
     )
     if(MSVC)
-        target_link_libraries(dmcr PRIVATE dplayx dxguid ole32)
+        target_link_libraries(dmcr PRIVATE dxguid ole32)  # no dplayx: MPlayerStub.cpp replaces DirectPlay
     endif()
 endif()
 
