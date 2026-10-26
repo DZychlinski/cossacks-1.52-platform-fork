@@ -33,7 +33,7 @@
     <ClInclude Include="StdAfx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\Main executable\common.h">
+    <ClInclude Include="..\MainExe\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

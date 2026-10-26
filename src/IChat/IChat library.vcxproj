@@ -140,7 +140,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\IntExplorer library\ParseRQ.cpp" />
+    <ClCompile Include="..\IntExplorer\ParseRQ.cpp" />
     <ClCompile Include="Chat\chatCallbacks.c" />
     <ClCompile Include="Chat\chatChannel.c" />
     <ClCompile Include="Chat\chatHandlers.c" />
@@ -156,7 +156,7 @@
     <ClCompile Include="StdAfx.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\IntExplorer library\ParseRQ.h" />
+    <ClInclude Include="..\IntExplorer\ParseRQ.h" />
     <ClInclude Include="Chat\chat.h" />
     <ClInclude Include="Chat\chatCallbacks.h" />
     <ClInclude Include="Chat\chatChannel.h" />

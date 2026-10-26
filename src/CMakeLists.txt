@@ -38,10 +38,10 @@ add_definitions(-DNODDRAW)
 # Find SDL2 dependencies
 if(WIN32)
     # Use bundled SDL2 on Windows
-    set(SDL2_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/Main executable/sdl/include")
-    set(SDL2_MIXER_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/Main executable/SDL2_mixer/include")
-    set(SDL2_LIB_DIR "${CMAKE_SOURCE_DIR}/Main executable/sdl/lib/${COSSACKS_ARCH}")
-    set(SDL2_MIXER_LIB_DIR "${CMAKE_SOURCE_DIR}/Main executable/SDL2_mixer/lib/${COSSACKS_ARCH}")
+    set(SDL2_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/MainExe/sdl/include")
+    set(SDL2_MIXER_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/MainExe/SDL2_mixer/include")
+    set(SDL2_LIB_DIR "${CMAKE_SOURCE_DIR}/MainExe/sdl/lib/${COSSACKS_ARCH}")
+    set(SDL2_MIXER_LIB_DIR "${CMAKE_SOURCE_DIR}/MainExe/SDL2_mixer/lib/${COSSACKS_ARCH}")
 else()
     # Use system SDL2 on macOS/Linux (install via: brew install sdl2 sdl2_mixer)
     find_package(PkgConfig REQUIRED)
@@ -58,16 +58,16 @@ add_subdirectory(platform)
 # 3. IChat.dll (depends on dmcr)       — optional, GameSpy dead
 # 4. IntExplorer.dll (depends on dmcr)  — optional, GameSpy dead
 
-add_subdirectory("CommCore library")
-add_subdirectory("Main executable")
+add_subdirectory(CommCore)
+add_subdirectory(MainExe)
 
 # Optional DLL modules (GameSpy-dependent, not needed for LAN)
 option(BUILD_ICHAT "Build IChat library (requires GameSpy servers)" OFF)
 option(BUILD_INTEXPLORER "Build IntExplorer library" OFF)
 
 if(BUILD_ICHAT)
-    add_subdirectory("IChat library")
+    add_subdirectory(IChat)
 endif()
 if(BUILD_INTEXPLORER)
-    add_subdirectory("IntExplorer library")
+    add_subdirectory(IntExplorer)
 endif()

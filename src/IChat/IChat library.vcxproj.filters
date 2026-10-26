@@ -30,7 +30,7 @@
     <ClCompile Include="StdAfx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\IntExplorer library\ParseRQ.cpp">
+    <ClCompile Include="..\IntExplorer\ParseRQ.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="darray.c">
@@ -68,7 +68,7 @@
     <ClInclude Include="StdAfx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\IntExplorer library\ParseRQ.h">
+    <ClInclude Include="..\IntExplorer\ParseRQ.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="darray.h">

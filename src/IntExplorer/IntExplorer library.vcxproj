@@ -149,7 +149,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\Main executable\common.h" />
+    <ClInclude Include="..\MainExe\common.h" />
     <ClInclude Include="Bmptool.h" />
     <ClInclude Include="DString.h" />
     <ClInclude Include="GameOnMap.h" />
