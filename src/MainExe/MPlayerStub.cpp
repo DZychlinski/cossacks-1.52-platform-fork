@@ -1051,7 +1051,7 @@ bool CreateNamedSession(char* Name, DWORD User2, int Max)
 }
 
 bool JoinNameToSession(int, char*) { return false; }
-void DPL_CreatePlayer(IDirectPlay3*, GUID*, DPNAME*, bool) {}
+bool DPL_CreatePlayer(IDirectPlay3*, GUID*, DPNAME*, bool) { return false; } // bool as declared in Interface.cpp; MSVC mangles the return type
 
 void StopConnectionToSession(IDirectPlay3*)
 {

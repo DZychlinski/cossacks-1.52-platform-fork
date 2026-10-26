@@ -153,8 +153,9 @@ cmake --build out/build/win32-release --config Release
 
 The `.sln` files are not used: they target the VS 2015/2019 toolsets and do not include `platform/`.
 
-**Status:** all sources compile; the link step still has unresolved symbols (web-only data and
-network functions, the IChat/IntExplorer modules, and the SDL entry point).
+**Status:** all sources compile; the link step still misses the three web-only game-data functions
+(`cos_data_init`, `cos_fetch_file`, `cos_persist_soon`) used by `Arc/GSCset.cpp`. A native data
+loader reading the unpacked `data/<lang>/` tree is next.
 
 ## Changes from upstream
 
@@ -168,6 +169,16 @@ network functions, the IChat/IntExplorer modules, and the SDL entry point).
 | 32-bit builds target Windows 7 instead of XP | MSVC v143 cannot target XP, and the XP target hid `RtlCaptureStackBackTrace` used by the crash logger. |
 | Small MSVC equivalents in `Ddex1.cpp` (early-init hook via `.CRT$XCT` instead of `__attribute__((constructor))`), `Ddini.cpp` (`F_OK`), `GSCset.cpp` (`mkdir` → `_mkdir`) | GCC-only constructs. |
 | MSVC builds use `MPlayerStub.cpp` instead of `MPlayer.cpp`; `dplayx.lib` is no longer linked; `DirectPlayLobbyCreateA` stub declared `WINAPI` | `MPlayerStub.cpp` is the CommCore multiplayer with the 1.52 direct-IP rework used by every other build. `MPlayer.cpp` uses DirectPlay, a legacy Windows component players would have to enable by hand. |
+| `MPlayerStub.cpp`: `DPL_CreatePlayer` stub returns `bool` | `Interface.cpp` declares it `bool`; MSVC includes the return type in the mangled name, so the `void` stub did not link. |
+| New `MainExe/NativeStubs.cpp` (MSVC only): inert IChat lobby/chat functions, IntExplorer access keys, and the web relay `cosn_*` functions | The native build does not compile IChat/IntExplorer or the JavaScript relay. The internet lobby is therefore unavailable natively; single-player, LAN and direct-IP play are unaffected. |
+| Windows builds no longer link `SDL2main`; MSVC builds a GUI-subsystem exe (`WIN32_EXECUTABLE`) | The game defines its own `WinMain` (`Ddex1.cpp`); `SDL2main` replaced it with a `main` that calls a nonexistent `SDL_main`. |
+
+## Possible future work
+
+| Idea | Notes |
+|---|---|
+| Read an original Cossacks: Back to War installation (`all.gsc` archive + loose files) | The native data loader targets the unpacked `data/<lang>/` tree of the web build. Supporting an original install may need the original GSC archive reader restored in `Arc/GSCset.cpp`. |
+| Native internet lobby | Build IChat/IntExplorer natively (or reimplement their transport) so the exe can use the GSC lobby, chat and relay on the multiplayer server, replacing the stubs in `NativeStubs.cpp`. |
 
 # Building from Source
 

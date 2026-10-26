@@ -105,6 +105,10 @@ set(MAIN_SOURCES
 if(WIN32)
     # Windows (MSVC and MinGW): real Win32 API, only needs the CommCore multiplayer stub
     list(APPEND MAIN_SOURCES MPlayerStub.cpp)
+    if(MSVC)
+        # Inert stand-ins for the internet lobby (IChat/IntExplorer) and web relay functions
+        list(APPEND MAIN_SOURCES NativeStubs.cpp)
+    endif()
 else()
     # macOS/Linux: needs both CommCore stub and SDL event bridge
     list(APPEND MAIN_SOURCES MPlayerStub.cpp SdlEventBridge.cpp)
@@ -149,11 +153,11 @@ if(WIN32)
         ${SDL2_LIB_DIR}
         ${SDL2_MIXER_LIB_DIR}
     )
+    # Skip SDL2main: the game has its own WinMain (Ddex1.cpp)
+    target_link_libraries(dmcr PRIVATE SDL2 SDL2_mixer)
     if(MSVC)
-        target_link_libraries(dmcr PRIVATE SDL2 SDL2main SDL2_mixer)
-    else()
-        # MinGW: link SDL2.dll directly, skip SDL2main (we have our own main())
-        target_link_libraries(dmcr PRIVATE SDL2 SDL2_mixer)
+        # GUI subsystem so the linker enters through that WinMain, not a console main()
+        set_target_properties(dmcr PROPERTIES WIN32_EXECUTABLE TRUE)
     endif()
 else()
     target_include_directories(dmcr PRIVATE
