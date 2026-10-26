@@ -3398,7 +3398,7 @@ char EXCOMM[1024];
 bool HaveExComm = 0;
 void CmdAddMoney(byte, DWORD);
 
-extern const int kChatMessageDisplayTime;
+void CreateChatHint(char* s, byte opt); // Hint.cpp: chat message with game-time stamp
 
 __declspec(dllexport) void SetExComm(char* Data, int size)
 {
@@ -3417,7 +3417,7 @@ void HandleMouse(int x, int y)
 		switch (EXCOMM[0])
 		{
 		case 0://chat message
-			CreateTimedHintEx(EXCOMM + 1, kChatMessageDisplayTime, 32);//Chat message
+			CreateChatHint(EXCOMM + 1, 32);//Chat message
 			break;
 
 		case 1://money bonus

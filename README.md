@@ -310,6 +310,7 @@ so the AI economy can be compared with the human's.
 | `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
 | `COS_AI_LOG` CMake option (OFF): `AILog.cpp` writes `ai_logsi_<time>.log` with the AI's builds, upgrades, trades and a per-minute economy snapshot of every player (hooks in `Megapolis.cpp`, `Upgrade.cpp`, `Economy.cpp`, `Ddex1.cpp`) | Answers why the AI gathers less gold and iron than the human. See **AI activity log** above. |
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
+| Chat messages start with the game time (hours:minutes:seconds), e.g. `[0:12:34] Player: text` (`CreateChatHint`, `Hint.cpp`; used in `Interface.cpp`, `mapa.cpp`, `ActiveScenary.cpp`). Replays show the time stored in the recording; replays recorded before this change have no time | Easier to follow what happened when. |
 | The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |
 
 ## Possible future work

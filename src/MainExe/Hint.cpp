@@ -195,6 +195,17 @@ void CreateTimedHintEx( char* s, int time, byte opt )
 	HintOpt[0] = opt;
 }
 
+extern int GameTime;
+
+//Fork: adds a chat message prefixed with the game time (h:mm:ss), e.g. "[0:12:34] Player: text".
+//The stamped text is also what a recording stores, so replays (Recorder.cpp) show it unchanged.
+void CreateChatHint( char* s, byte opt )
+{
+	char stamped[256];
+	snprintf( stamped, sizeof( stamped ), "[%d:%02d:%02d] %s", GameTime / 3600, GameTime / 60 % 60, GameTime % 60, s );
+	CreateTimedHintEx( stamped, kChatMessageDisplayTime, opt );
+}
+
 //Shows all hints and adjusts timestamps
 //Call rate ~38 Hz
 void ProcessHints()

@@ -5037,7 +5037,7 @@ extern "C" __declspec( dllexport ) int GetAINation()
 
 extern byte CannonState;
 
-extern const int kChatMessageDisplayTime;
+void CreateChatHint( char* s, byte opt ); // Hint.cpp: chat message with game-time stamp
 
 // Fork: debug chat for AI DLLs built with AI_DEBUG_CHAT (CMake option COS_AI_DEBUG_CHAT): the DLL
 // calls this when TryUnit accepted a project. Only buildings are reported, in the AI's colour, at
@@ -5064,7 +5064,7 @@ extern "C" __declspec( dllexport ) void AIReportProject( GAMEOBJ* UnitType )
 	LastReport[NI][UnitType->Index] = now;
 	char msg[256];
 	sprintf( msg, "AI: building %s", GO->Message );
-	CreateTimedHintEx( msg, kChatMessageDisplayTime, 16 + NatRefTBL[NI] );
+	CreateChatHint( msg, 16 + NatRefTBL[NI] );
 }
 
 extern "C" __declspec( dllexport ) bool TryUnit( GAMEOBJ* UnitType, int Max, byte CostPercent, byte Probability )

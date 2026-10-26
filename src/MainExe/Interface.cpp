@@ -70,7 +70,7 @@ extern PlayerInfo PINFO[8];
 
 UdpHolePuncher udp_hole_puncher;
 
-extern const int kChatMessageDisplayTime;
+void CreateChatHint(char* s, byte opt); // Hint.cpp: chat message with game-time stamp
 extern const int kSystemMessageDisplayTime;
 
 extern bool RUNMAPEDITOR;
@@ -14596,7 +14596,7 @@ KRT:
 
 		EnterChatMode = 0;
 
-		CreateTimedHintEx(ChatString, kChatMessageDisplayTime, 16 + NatRefTBL[MyNation]);//Chat message
+		CreateChatHint(ChatString, 16 + NatRefTBL[MyNation]);//Chat message
 
 		bool ally = ((GetKeyState(VK_CONTROL) & 0x8000) != 0);
 		SendChat(ChatString, ally);
@@ -14982,7 +14982,7 @@ void ShowChat()
 			{//Show chat message with national color border
 				char cc1[250];
 				sprintf(cc1, "%s: %s", PINFO[i].name, CHATSTRING);
-				CreateTimedHintEx(cc1, kChatMessageDisplayTime, 16 + NatRefTBL[PINFO[i].ColorID]);//Chat message
+				CreateChatHint(cc1, 16 + NatRefTBL[PINFO[i].ColorID]);//Chat message
 				PlayEffect(GetSound("START"), 0, 0);
 				CHATSTRING[0] = 0;
 				i = NPlayers;
@@ -14999,7 +14999,7 @@ bool ProcessIndividualMessages(char* nick, char* message)
 	{
 		char buf[1024];
 		sprintf(buf, GetTextByID("COMCHAT"), nick, message);
-		CreateTimedHintEx(buf, kChatMessageDisplayTime, 0);//[FROM GENERAL CHAT] %s: %s
+		CreateChatHint(buf, 0);//[FROM GENERAL CHAT] %s: %s
 
 		PlayEffect(GetSound("START"), 0, 0);
 
@@ -15108,7 +15108,7 @@ void ShowMultiplayerChat()
 			{//FUNNY: buffer cc1[250] for a sprintf call with name[32] and CHATSTRING[256]. Srsly?!
 				char cc1[250];
 				sprintf(cc1, "%s: %s", PINFO[i].name, CHATSTRING);//CHATSTRING is limited to 120 in input window
-				CreateTimedHintEx(cc1, kChatMessageDisplayTime, 16 + NatRefTBL[PINFO[i].ColorID]);//Chat message
+				CreateChatHint(cc1, 16 + NatRefTBL[PINFO[i].ColorID]);//Chat message
 				PlayEffect(GetSound("START"), 0, 0);
 				CHATSTRING[0] = 0;
 				i = NPlayers;
