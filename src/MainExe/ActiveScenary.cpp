@@ -51,6 +51,9 @@ extern void dbglog(const char* fmt, ...);
 #include "EInfoClass.h"
 
 #include "PlayerInfo.h"
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
 extern PlayerInfo PINFO[8];
 
 extern bool NOPAUSE;
@@ -5133,7 +5136,22 @@ extern "C" __declspec( dllexport ) bool TryUnit( GAMEOBJ* UnitType, int Max, byt
 			if ( prid != 0xFFFF )
 			{
 				ProposedProject* PRP = &CCIT->Prop[prid];
+#ifdef AILOG_ENABLED
+				// rando() is called exactly as before (it is part of the synchronised game state)
+				bool ProbabilityPassed = rando() < PERCONV[Probability];
+				if ( CostPercent < PRP->Percent )
+				{
+					AILog_Want( CNAT->NNUM, false, UID, GO->Message, AILOG_WANT_TOO_EXPENSIVE, PRP->Percent, CostPercent );
+				}
+				else if ( ProbabilityPassed )
+				{
+					AILog_Want( CNAT->NNUM, false, UID, GO->Message,
+						( CCIT->PresentProject && GO->newMons->Building ) ? AILOG_WANT_BUSY : AILOG_WANT_ACCEPTED, 0, 0 );
+				}
+				if ( ProbabilityPassed && CostPercent >= PRP->Percent )
+#else
 				if ( rando() < PERCONV[Probability] && CostPercent >= PRP->Percent )
+#endif
 				{
 					if ( CCIT->PresentProject )
 					{
@@ -5152,7 +5170,19 @@ extern "C" __declspec( dllexport ) bool TryUnit( GAMEOBJ* UnitType, int Max, byt
 					}
 				}
 			}
+#ifdef AILOG_ENABLED
+			else
+			{
+				AILog_Want( CNAT->NNUM, false, UID, GO->Message, AILOG_WANT_UNAVAILABLE, 0, 0 );
+			}
+#endif
 		}
+#ifdef AILOG_ENABLED
+		else
+		{
+			AILog_Want( CNAT->NNUM, false, UID, GO->Message, AILOG_WANT_MAX_REACHED, CCIT->UnitAmount[UID], Max );
+		}
+#endif
 		return false;
 	}
 	else
@@ -5192,13 +5222,34 @@ extern "C" __declspec( dllexport ) bool TryUpgrade( GAMEOBJ* Upgrade, int CostPe
 		if ( prid != 0xFFFF )
 		{
 			ProposedProject* PRP = &CCIT->Prop[prid];
+#ifdef AILOG_ENABLED
+			// rando() is called exactly as before (it is part of the synchronised game state)
+			bool ProbabilityPassed = rando() < PERCONV[Probability];
+			const char* UpgName = NU->Message ? NU->Message : NU->Name;
+			if ( CostPercent < PRP->Percent )
+			{
+				AILog_Want( CNAT->NNUM, true, UID, UpgName, AILOG_WANT_TOO_EXPENSIVE, PRP->Percent, CostPercent );
+			}
+			else if ( ProbabilityPassed )
+			{
+				AILog_Want( CNAT->NNUM, true, UID, UpgName, AILOG_WANT_ACCEPTED, 0, 0 );
+			}
+			if ( ProbabilityPassed && CostPercent >= PRP->Percent )
+#else
 			if ( rando() < PERCONV[Probability] && CostPercent >= PRP->Percent )
+#endif
 			{
 				CCIT->BestProj[CCIT->NBestProjects] = prid;
 				CCIT->NBestProjects++;
 				return true;
 			}
 		}
+#ifdef AILOG_ENABLED
+		else
+		{
+			AILog_Want( CNAT->NNUM, true, UID, NU->Message ? NU->Message : NU->Name, AILOG_WANT_UNAVAILABLE, 0, 0 );
+		}
+#endif
 		return false;
 	}
 	else
@@ -5227,6 +5278,9 @@ extern "C" __declspec( dllexport ) void SetPDistribution( int OnFood, int OnWood
 		CNAT->POnFood = OnFood;
 		CNAT->POnWood = OnWood;
 		CNAT->POnStone = OnStone;
+#ifdef AILOG_ENABLED
+		AILog_PDist( CNAT->NNUM, OnFood, OnWood, OnStone );
+#endif
 	}
 	else
 	{
@@ -5670,6 +5724,9 @@ extern "C" __declspec( dllexport )void SetMinesUpgradeRules( int* Table )
 	Nat->MU3C_PERCENT[0] = Table[24];
 	Nat->MU3C_PERCENT[1] = Table[25];
 	Nat->MU3C_PERCENT[2] = Table[26];
+#ifdef AILOG_ENABLED
+	AILog_MineRules( Nat->NNUM, Table );
+#endif
 }
 
 extern "C" __declspec( dllexport )bool FieldExist()

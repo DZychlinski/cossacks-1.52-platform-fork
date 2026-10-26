@@ -72,7 +72,7 @@ void OneObject::PerformUpgrade( word NewU, word MakerID )
 	}
 
 #ifdef AILOG_ENABLED
-	// Started for real: resources are about to be paid. AI-only (AILog_Event ignores human nations).
+	// Started for real: resources are about to be paid.
 	AILog_Event(NNUM, "%s %s", newMons->Usage == MineID ? "MINE-UPGRADE" : "UPGRADE", NU->Message ? NU->Message : NU->Name);
 #endif
 	int Use = newMons->Usage;

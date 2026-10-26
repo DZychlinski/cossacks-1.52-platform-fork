@@ -2448,11 +2448,18 @@ int CreateNewTerrMons2( byte NI, int x, int y, word Type )
 	return -1;
 }
 
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
 void CreateBuilding( byte NI, int x, int y, word Type, byte OrdType )
 {
 	int j = NATIONS[NatRefTBL[NI]].CreateNewMonsterAt( x, y, Type, false );
 	if ( j != -1 )
 	{
+#ifdef AILOG_ENABLED
+		// Building ordered by a player command (the AI places its buildings in City::ProcessCreation)
+		AILog_Event(NatRefTBL[NI], "BUILD %s", NATIONS[NatRefTBL[NI]].Mon[Type]->Message);
+#endif
 		BuildWithSelected( NI, j, OrdType );
 	}
 }

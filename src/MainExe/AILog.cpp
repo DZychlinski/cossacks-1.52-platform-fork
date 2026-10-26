@@ -22,6 +22,11 @@ extern char** NatNames;
 extern int NNations;
 
 static const int kSnapshotPeriodSec = 60;
+static const int kMaxUnitTypes = 2048;    // Nation::NKilled / NProduced / Mon size
+static const int kMaxUpgrades = 4096;     // same bound as AIReportProject
+static const int kNNations = 8;
+static const int kMineRulesSize = 27;     // SetMinesUpgradeRules table: 3 levels x gold/iron/coal x 3 values
+static const byte kNoReportedOutcome = 0xFF;
 
 // Mine kind = Nat->Mon index offset from Nat->UID_MINE (see Megapolis.cpp UpgradeMines: NMinGL, NMinFE, NMinCO).
 struct MineKindDef
@@ -57,10 +62,36 @@ static const KeyBuildingDef kKeyBuildings[] = {
 };
 static const int kNKeyBuildings = sizeof(kKeyBuildings) / sizeof(kKeyBuildings[0]);
 
+// Peasant jobs: engine order handlers (DoLink) that mean "working" for a peasant.
+extern void TakeResLink(OneObject* OBJ);    // gathering food/wood/stone (also carrying it to the base)
+extern void BuildObjLink(OneObject* OBJ);   // constructing / repairing a building
+extern void GoToMineLink(OneObject* OB);    // walking to a mine to go inside
+
 static FILE* g_file = NULL;
 static int g_lastGameTime = -1;
 static int g_nextSnapshot = 0;
 static char g_exeDir[MAX_PATH];
+
+// Change detection for AI proposals / settings, and baselines for the per-minute unit counters.
+static byte g_lastWant[kNNations][2][kMaxUpgrades];
+static int g_lastPDist[kNNations][3];
+static bool g_hasPDist[kNNations];
+static int g_lastMineRules[kNNations][kMineRulesSize];
+static bool g_hasMineRules[kNNations];
+static word g_prevProduced[kNNations][kMaxUnitTypes];
+static word g_prevKilled[kNNations][kMaxUnitTypes];
+
+static void ResetTracking()
+{
+	memset(g_lastWant, kNoReportedOutcome, sizeof g_lastWant);
+	memset(g_hasPDist, 0, sizeof g_hasPDist);
+	memset(g_hasMineRules, 0, sizeof g_hasMineRules);
+	for (int ni = 0; ni < kNNations; ni++)
+	{
+		memcpy(g_prevProduced[ni], NATIONS[ni].NProduced, sizeof g_prevProduced[ni]);
+		memcpy(g_prevKilled[ni], NATIONS[ni].NKilled, sizeof g_prevKilled[ni]);
+	}
+}
 
 static void CloseLog()
 {
@@ -128,6 +159,7 @@ static void OpenLog()
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 	g_file = fopen(path, "w");
 	if (!g_file) return;
+	ResetTracking();
 	fprintf(g_file, "# Cossacks AI log, started %04d-%02d-%02d %02d:%02d:%02d\n",
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 	for (int ni = 0; ni < 8; ni++)
@@ -155,11 +187,25 @@ static void WriteStamp(int NI, const char* who)
 	fprintf(g_file, "%02d:%02d P%d %-5s ", GameTime / 60, GameTime % 60, NI, who);
 }
 
+static const char* WhoTag(int NI)
+{
+	return NATIONS[NI].AI_Enabled ? "AI" : "HUMAN";
+}
+
+static bool AnyAI()
+{
+	for (int ni = 0; ni < kNNations; ni++)
+	{
+		if (NATIONS[ni].AI_Enabled) return true;
+	}
+	return false;
+}
+
 void AILog_Event(int NI, const char* fmt, ...)
 {
-	if (NI < 0 || NI > 7 || !NATIONS[NI].AI_Enabled) return;
+	if (NI < 0 || NI > 7 || !AnyAI()) return;
 	if (!EnsureLog()) return;
-	WriteStamp(NI, "AI");
+	WriteStamp(NI, WhoTag(NI));
 	va_list ap;
 	va_start(ap, fmt);
 	vfprintf(g_file, fmt, ap);
@@ -179,6 +225,7 @@ struct MineStat
 
 struct NatStat
 {
+	int Work[7];       // peasant jobs, index = WorkSlot
 	int Peasants;
 	int Military;
 	MineStat Mines[3];
@@ -186,6 +233,37 @@ struct NatStat
 	int Key[8];
 	std::map<std::string, int> Buildings;  // finished buildings by name (barracks etc. differ per nation)
 };
+
+enum WorkSlot { W_FOOD, W_WOOD, W_STONE, W_TOMINE, W_BUILD, W_IDLE, W_OTHER };
+
+// Resources gathered outside mines and the WORK slot of the peasants gathering them.
+struct GatherDef
+{
+	int ResID;
+	WorkSlot Slot;
+};
+static const GatherDef kGatherDefs[] = {
+	{ FoodID,  W_FOOD },   // fields, farms
+	{ TreeID,  W_WOOD },
+	{ StoneID, W_STONE },
+};
+static const int kNGather = sizeof(kGatherDefs) / sizeof(kGatherDefs[0]);
+
+// Current job of a free (not hidden) peasant, from its first order and the resource it carries.
+static WorkSlot PeasantJob(OneObject* OB)
+{
+	Order1* OR1 = OB->LocalOrder;
+	if (!OR1) return W_IDLE;
+	byte res = OB->RType;
+	if (OR1->DoLink == &TakeResLink) res = OR1->info.TakeRes.ResID;
+	else if (OR1->DoLink == &BuildObjLink) return W_BUILD;
+	else if (OR1->DoLink == &GoToMineLink) return W_TOMINE;
+	for (int k = 0; k < kNGather; k++)
+	{
+		if (res == kGatherDefs[k].ResID) return kGatherDefs[k].Slot;
+	}
+	return W_OTHER;
+}
 
 static void AddMine(MineStat& M, OneObject* OB)
 {
@@ -223,6 +301,28 @@ static bool CenturyDone(Nation* NT)
 	return false;
 }
 
+// "<tag> type=n ..." for counters that grew since the previous snapshot; updates the baseline.
+// MADE lists units only (a building counted there would be a foundation), LOST everything.
+static void PrintDeltas(const char* tag, const word* cur, word* prev, Nation* NT, bool withBuildings)
+{
+	fprintf(g_file, "%s", tag);
+	for (int j = 0; j < NT->NMon && j < kMaxUnitTypes; j++)
+	{
+		word d = word(cur[j] - prev[j]);
+		prev[j] = cur[j];
+		GeneralObject* GO = NT->Mon[j];
+		if (!d || !GO || !GO->Message) continue;
+		if (!withBuildings && GO->newMons->Building) continue;
+		std::string nm = GO->Message;
+		for (size_t c = 0; c < nm.size(); c++)
+		{
+			if (nm[c] == ' ') nm[c] = '_';
+		}
+		fprintf(g_file, " %s=%d", nm.c_str(), int(d));
+	}
+	fputc('\n', g_file);
+}
+
 static void Snapshot()
 {
 	NatStat* S = new NatStat[8];
@@ -233,6 +333,7 @@ static void Snapshot()
 		memset(S[i].Mines, 0, sizeof(S[i].Mines));
 		memset(&S[i].OtherMines, 0, sizeof(S[i].OtherMines));
 		memset(S[i].Key, 0, sizeof(S[i].Key));
+		memset(S[i].Work, 0, sizeof(S[i].Work));
 	}
 	for (int i = 0; i < MAXOBJECT; i++)
 	{
@@ -271,6 +372,7 @@ static void Snapshot()
 		else if (NM->Peasant)
 		{
 			N.Peasants++;
+			if (!OB->Hidden) N.Work[PeasantJob(OB)]++;  // hidden ones are inside mines/buildings, see the mines' Inside
 		}
 		else
 		{
@@ -282,7 +384,7 @@ static void Snapshot()
 		if (!NationInGame(ni)) continue;
 		Nation* NT = NATIONS + ni;
 		NatStat& N = S[ni];
-		const char* who = NT->AI_Enabled ? "AI" : "HUMAN";
+		const char* who = WhoTag(ni);
 		WriteStamp(ni, who);
 		fprintf(g_file, "SNAP nation=%s name=%s\n", NationName(ni), PlayerName(ni));
 		WriteStamp(ni, who);
@@ -302,6 +404,24 @@ static void Snapshot()
 		if (N.OtherMines.Count || N.OtherMines.Building) PrintMine("other", N.OtherMines);
 		fputc('\n', g_file);
 		WriteStamp(ni, who);
+		fprintf(g_file, "WORK");
+		{
+			int inside = 0;
+			for (int k = 0; k < kMineKinds; k++) inside += N.Mines[k].Inside;
+			inside += N.OtherMines.Inside;
+			fprintf(g_file, " food=%d wood=%d stone=%d", N.Work[W_FOOD], N.Work[W_WOOD], N.Work[W_STONE]);
+			for (int k = 0; k < kMineKinds; k++) fprintf(g_file, " %s=%d", kMineKindDefs[k].Label, N.Mines[k].Inside);
+			int hiddenElsewhere = N.Peasants - N.Work[W_FOOD] - N.Work[W_WOOD] - N.Work[W_STONE] - N.Work[W_TOMINE]
+				- N.Work[W_BUILD] - N.Work[W_IDLE] - N.Work[W_OTHER] - inside;
+			if (hiddenElsewhere < 0) hiddenElsewhere = 0;
+			fprintf(g_file, " tomine=%d build=%d idle=%d other=%d\n", N.Work[W_TOMINE], N.Work[W_BUILD], N.Work[W_IDLE],
+				N.Work[W_OTHER] + hiddenElsewhere);
+		}
+		WriteStamp(ni, who);
+		PrintDeltas("MADE", NT->NProduced, g_prevProduced[ni], NT, false);
+		WriteStamp(ni, who);
+		PrintDeltas("LOST", NT->NKilled, g_prevKilled[ni], NT, true);
+		WriteStamp(ni, who);
 		fprintf(g_file, "BLD ");
 		for (int k = 0; k < kNKeyBuildings; k++) fprintf(g_file, " %s=%d", kKeyBuildings[k].Label, N.Key[k]);
 		fprintf(g_file, " Houses=%d\n", N.Key[7]);
@@ -317,14 +437,69 @@ static void Snapshot()
 	delete[] S;
 }
 
+void AILog_Want(int NI, bool Upgrade, int Index, const char* Name, AILogWant Outcome, int A, int B)
+{
+	if (NI < 0 || NI >= kNNations || Index < 0 || Index >= (Upgrade ? kMaxUpgrades : kMaxUnitTypes)) return;
+	if (!EnsureLog()) return;
+	byte& last = g_lastWant[NI][Upgrade ? 1 : 0][Index];
+	if (last == byte(Outcome)) return;
+	last = byte(Outcome);
+	const char* tag = Upgrade ? "WANT-UPG" : "WANT";
+	switch (Outcome)
+	{
+	case AILOG_WANT_ACCEPTED:
+		AILog_Event(NI, "%s %s accepted", tag, Name);
+		break;
+	case AILOG_WANT_MAX_REACHED:
+		AILog_Event(NI, "%s %s skip: max reached (%d/%d)", tag, Name, A, B);
+		break;
+	case AILOG_WANT_TOO_EXPENSIVE:
+		AILog_Event(NI, "%s %s skip: too expensive (costs %d%% of stock, allowed %d%%)", tag, Name, A, B);
+		break;
+	case AILOG_WANT_UNAVAILABLE:
+		AILog_Event(NI, "%s %s skip: not available", tag, Name);
+		break;
+	case AILOG_WANT_BUSY:
+		AILog_Event(NI, "%s %s skip: busy (another building project in progress)", tag, Name);
+		break;
+	}
+}
+
+void AILog_PDist(int NI, int OnFood, int OnWood, int OnStone)
+{
+	if (NI < 0 || NI >= kNNations || !EnsureLog()) return;
+	int* last = g_lastPDist[NI];
+	if (g_hasPDist[NI] && last[0] == OnFood && last[1] == OnWood && last[2] == OnStone) return;
+	g_hasPDist[NI] = true;
+	last[0] = OnFood;
+	last[1] = OnWood;
+	last[2] = OnStone;
+	AILog_Event(NI, "PDIST food=%d wood=%d stone=%d (relative weights of the peasants gathering each)", OnFood, OnWood, OnStone);
+}
+
+void AILog_MineRules(int NI, const int* Table)
+{
+	if (NI < 0 || NI >= kNNations || !EnsureLog()) return;
+	if (g_hasMineRules[NI] && !memcmp(g_lastMineRules[NI], Table, sizeof g_lastMineRules[NI])) return;
+	g_hasMineRules[NI] = true;
+	memcpy(g_lastMineRules[NI], Table, sizeof g_lastMineRules[NI]);
+	char buf[kMineRulesSize * 8 + 8];
+	int n = 0;
+	for (int i = 0; i < kMineRulesSize; i++)
+	{
+		bool lastOfGroup = i % 3 == 2;
+		bool lastOverall = i == kMineRulesSize - 1;
+		n += snprintf(buf + n, sizeof buf - n, "%d%s", Table[i], lastOverall ? "" : (lastOfGroup ? " | " : ","));
+	}
+	AILog_Event(NI, "MINE-RULES (3 values per group; groups: gold,iron,coal for level I, then II, then III) %s", buf);
+}
+
 void AILog_Tick()
 {
 	if (GameTime < g_lastGameTime) CloseLog();
 	g_lastGameTime = GameTime;
 	if (GameTime < g_nextSnapshot) return;
-	bool anyAI = false;
-	for (int ni = 0; ni < 8; ni++) anyAI = anyAI || NATIONS[ni].AI_Enabled;
-	if (!anyAI) return;
+	if (!AnyAI()) return;
 	if (!EnsureLog()) return;
 	g_nextSnapshot = GameTime - GameTime % kSnapshotPeriodSec + kSnapshotPeriodSec;
 	Snapshot();

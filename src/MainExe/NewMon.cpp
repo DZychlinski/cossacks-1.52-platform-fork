@@ -13311,6 +13311,9 @@ bool OneObject::FindPoint( int* x1, int* y1, byte Flags )
 };
 void CmdFieldBar( byte NI, word n );
 void CreateFields( byte NI, int x, int y, int n );
+#ifdef COS_AI_LOG
+#include "AILog.h"
+#endif
 void InvitePeasant( OneObject* Mine );
 extern bool EditMapMode;
 void OneObject::NextStage()
@@ -13342,6 +13345,9 @@ void OneObject::NextStage()
 				};
 			};
 			Ready = true;
+#ifdef AILOG_ENABLED
+			AILog_Event(NNUM, "DONE %s", Ref.General->Message);
+#endif
 			LoLayer = &NM->StandLo;
 			HiLayer = &NM->StandHi;
 			NewAnm = &NM->Work;

@@ -264,23 +264,38 @@ in use: the shipped DLLs never post these messages. The DLL calls the engine exp
 does not affect the game.
 
 **AI activity log.** Configure with `-DCOS_AI_LOG=ON` (default OFF, MSVC only) to write one file per
-game, `ai_logs\ai_<YYYYMMDD-HHMMSS>.log` next to `dmcr.exe`, flushed after every line. Every line starts
-with the game time `mm:ss`, the nation index and `AI` or `HUMAN`. Events (computer players only):
-`BUILD` / `BUILD-FAIL` (building foundation placed / project abandoned), `UPGRADE` and `MINE-UPGRADE`
-(started), `TRADE` (market exchange, with the amount received). Every 60 s of game time each player,
-human included, gets a snapshot: stockpile (`RES`), gathered so far (`GATH`), population, houses,
-peasants, military and 18th century state (`POP`), gold/iron/coal mines with count, miners inside /
-capacity and upgrade levels (`MINE`), key buildings (`BLD`) and all finished buildings by name (`BLDN`),
-so the AI economy can be compared with the human's.
+game with a computer player, `ai_logs\ai_<YYYYMMDD-HHMMSS>.log` next to `dmcr.exe`, flushed after every
+line. Every line starts with the game time `mm:ss`, the nation index and `AI` or `HUMAN`, so the
+computer players can be compared with the human. Actual actions of every player: `BUILD` (foundation
+placed; for the AI also `BUILD-FAIL` when the project is abandoned), `DONE` (construction finished),
+`UPGRADE` and `MINE-UPGRADE` (started), `TRADE` (market exchange, with the amount received). AI intents
+(AI players only, written only when the outcome for that item changes): `WANT` (unit or building) and
+`WANT-UPG` (upgrade) followed by `accepted` or `skip: <reason>` (max reached, too expensive, not
+available, busy with another building project; random probability rejections are not logged),
+`PDIST` (peasant share weights food/wood/stone) and `MINE-RULES` (mine upgrade percentages).
+Every 60 s of game time each player gets a snapshot: stockpile (`RES`), gathered so far (`GATH`),
+population, houses, peasants, military and 18th century state (`POP`), gold/iron/coal mines with count,
+miners inside / capacity and upgrade levels (`MINE`), **what the peasants are doing right now**
+(`WORK`: gathering food/wood/stone, miners inside gold/iron/coal mines, `tomine` walking to a mine,
+`build`, `idle`, `other`), units produced (`MADE`) and units or buildings lost (`LOST`) since the
+previous snapshot, key buildings (`BLD`) and all finished buildings by name (`BLDN`).
 
 ```
 00:00 P1 AI    BUILD Town Centre
 03:12 P1 AI    BUILD Gold Mine
+03:40 P1 AI    DONE Gold Mine
+03:41 P1 AI    WANT Barracks skip: too expensive (costs 40% of stock, allowed 25%)
+03:55 P1 AI    WANT Barracks accepted
 04:05 P1 AI    MINE-UPGRADE Mine upgrade 1
+04:10 P1 AI    WANT-UPG Rapid fire skip: not available
 05:00 P1 AI    TRADE 500 wood -> 410 gold
+05:00 P1 AI    PDIST food=3 wood=2 stone=1 (relative weights of the peasants gathering each)
 05:00 P1 AI    SNAP nation=Poland name=Computer
-05:00 P1 AI    MINE gold: mines=2 building=0 inside=11/20 levels=1,1,0,0,0,0,0,0 iron: mines=1 building=0 inside=4/10 levels=1,0,0,0,0,0,0,0 coal: mines=0 building=0 inside=0/0 levels=0,0,0,0,0,0,0,0
+05:00 P1 AI    WORK food=12 wood=9 stone=3 gold=11 iron=4 coal=0 tomine=2 build=3 idle=5 other=0
+05:00 P1 AI    MADE Peasant=6 Pikeman=4
+05:00 P1 AI    LOST Pikeman=1
 05:00 P0 HUMAN RES  food=900 wood=1200 stone=300 gold=2100 iron=800 coal=100
+05:00 P0 HUMAN WORK food=10 wood=8 stone=2 gold=20 iron=9 coal=3 tomine=0 build=2 idle=0 other=0
 ```
 
 ## Changes from upstream
@@ -309,7 +324,7 @@ so the AI economy can be compared with the human's.
 | `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile), optional Storehouses 2–4 (≤50%), unlimited 18c barracks (≤90%), 18th century first and saved for earlier | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
 | `Megapolis.cpp`: computer players above 500 population keep at least 80 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
 | `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
-| `COS_AI_LOG` CMake option (OFF): `AILog.cpp` writes `ai_logsi_<time>.log` with the AI's builds, upgrades, trades and a per-minute economy snapshot of every player (hooks in `Megapolis.cpp`, `Upgrade.cpp`, `Economy.cpp`, `Ddex1.cpp`) | Answers why the AI gathers less gold and iron than the human. See **AI activity log** above. |
+| `COS_AI_LOG` CMake option (OFF): `AILog.cpp` writes `ai_logs\ai_<time>.log` with what every player built, upgraded and traded, what the AI scripts wanted and why they skipped it, and a per-minute snapshot (economy, peasant jobs, units made and lost) of every player (hooks in `Megapolis.cpp`, `Multi.cpp`, `NewMon.cpp`, `Upgrade.cpp`, `Economy.cpp`, `ActiveScenary.cpp`, `Ddex1.cpp`) | Answers why the AI gathers less gold and iron than the human and lets the AI be tuned against a human game. See **AI activity log** above. |
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
 | Chat messages start with the game time (hours:minutes:seconds), e.g. `[0:12:34] Player: text` (`CreateChatHint`, `Hint.cpp`; used in `Interface.cpp`, `mapa.cpp`, `ActiveScenary.cpp`). Replays show the time stored in the recording; replays recorded before this change have no time | Easier to follow what happened when. |
 | The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |
