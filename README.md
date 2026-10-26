@@ -245,12 +245,13 @@ optional: the AI builds it when it can afford it and otherwise carries on with t
 | Change | Values (constants at the top of `Extraction.h`) |
 |---|---|
 | Town Centres 3–5 are optional right after the "2 Town Centres finished" gate (before: the 4th came late behind a gate, the 5th only after the 18th century and the Academy building upgrade) | up to `AI_OPTIONAL_CENTERS` = 5, at most `AI_OPTIONAL_CENTERS_COST_PERCENT` = 75% of the stockpile |
+| Storehouses 2–4 are optional right after the same gate (before: 1 until 4 Town Centres were finished) | up to `AI_OPTIONAL_STOREHOUSES` = 4, at most `AI_OPTIONAL_STOREHOUSES_COST_PERCENT` = 50% of the stockpile |
 | 18c barracks: no count limit beyond the original first 3 (before: max 3, later 6) | `AI_KAZ18_MAX` = 1000, at most `AI_KAZ18_COST_PERCENT` = 30% of the stockpile; each barracks costs twice the previous one, which limits them naturally |
 
 Houses are built by the engine, not the AI script (`City` logic in `src/MainExe/Megapolis.cpp`): a
 computer player adds a house when its free population capacity drops below a buffer that grows with
 population (7 places above 10 population … 60 above 80). The fork adds: above 500 population, keep
-at least 100 places free. This applies to every computer player, including the three nations
+at least 80 places free. This applies to every computer player, including the three nations
 without AI source.
 
 **Debug chat.** Configure with `-DCOS_AI_DEBUG_CHAT=ON` (default OFF) to make the rebuilt AI announce
@@ -283,8 +284,8 @@ does not affect the game.
 | MSVC post-build step in `src/MainExe/CMakeLists.txt` (+ `src/cmake/copy_missing.cmake`) copies the SDL DLLs, `ai/` and `data_min/` next to the exe | The game switches to the exe folder at startup and opens these by relative path. See [Running](#running). |
 | Added the nation AI sources (`src/AI/`, AI Pack v0.995) and a CMake subproject building 17 AI DLLs into `ai_rebuilt/` (MSVC only; flags `/Zc:forScope-` for VC6 loop scoping, static CRT as originally, `/NODEFAULTLIB:..\dmcr.lib` for an obsolete pragma in `Ai.h`). No source edits. | Lets the AI be changed and rebuilt like the rest of the game. See [Nation AI sources](#nation-ai-sources). |
 | `COS_USE_REBUILT_AI` CMake option (ON) with an `AI_Deploy` target copying the rebuilt AI DLLs into `ai\` next to the exe | Plays against the AI built from source; it runs after `dmcr`'s post-build step, which copies the shipped `ai/` folder. |
-| `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile) and unlimited 18c barracks (≤30%) | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
-| `Megapolis.cpp`: computer players above 500 population keep at least 100 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
+| `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile), optional Storehouses 2–4 (≤50%) and unlimited 18c barracks (≤30%) | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
+| `Megapolis.cpp`: computer players above 500 population keep at least 80 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
 | `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
 | The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |

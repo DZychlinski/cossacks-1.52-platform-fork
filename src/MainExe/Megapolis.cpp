@@ -2305,7 +2305,7 @@ void City::ProcessCreation()
 					NeedFarm = true;
 				// Fork: large AI populations keep a bigger reserve of free population capacity
 				const int BigPopulation = 500;
-				const int BigPopulationFreeCapacity = 100;
+				const int BigPopulationFreeCapacity = 80;
 				if (NGID > BigPopulation && NF - NGID < BigPopulationFreeCapacity)
 					NeedFarm = true;
 			}

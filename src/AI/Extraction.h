@@ -4,6 +4,8 @@
 #define AI_OPTIONAL_CENTERS_COST_PERCENT 75
 #define AI_KAZ18_MAX                     1000 // 18c barracks: no practical count limit beyond the first 3
 #define AI_KAZ18_COST_PERCENT            30
+#define AI_OPTIONAL_STOREHOUSES          4    // Storehouses 2..4 next to the optional Town Centres
+#define AI_OPTIONAL_STOREHOUSES_COST_PERCENT 50
 void DoFish(){
 	if(UpgIsRun(&XVIII)){
 		TryUnit(&PORT,1,100,100);
@@ -318,6 +320,7 @@ void Buildings(){
 	TryUnit(&CENTER, 2, 100, 100);	
 	if(GetReadyUnits(&CENTER)<2 && GetStartRes()!=SR_1000) return;
 	TryUnit(&CENTER, AI_OPTIONAL_CENTERS, AI_OPTIONAL_CENTERS_COST_PERCENT, 100);
+	TryUnit(&SKLAD, AI_OPTIONAL_STOREHOUSES, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
 
 	TryUnit(&KAZ17, 1, 100, 100);		
 	TryUnit(&AKADEMIA, 1, 100, 100);
