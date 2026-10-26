@@ -14943,6 +14943,7 @@ extern short AlarmSoundID;
 extern int LastAttackX;
 extern int LastAttackY;
 extern int AlarmDelay;
+extern const int kAttackAlarmFrames;
 
 void StopUpgradeInBuilding( OneObject *OB );
 
@@ -15168,7 +15169,7 @@ void CheckCapture( OneObject* OBJ )
 			LastActionY = OBJ->RealY >> 4;
 			LastAttackX = OBJ->RealX;
 			LastAttackY = OBJ->RealY;
-			AlarmDelay = 60;
+			AlarmDelay = kAttackAlarmFrames;
 		}
 
 		if ( OBJ->newMons->Usage == PeasantID )
@@ -15202,7 +15203,7 @@ void CheckCapture( OneObject* OBJ )
 				AddEffect( ( mapx * 32 ) + 500, ( mapy * 16 ) + 300, AlarmSoundID );
 				LastActionX = OBJ->RealX;
 				LastActionY = OBJ->RealY;
-				AlarmDelay = 60;
+				AlarmDelay = kAttackAlarmFrames;
 			}
 		}
 

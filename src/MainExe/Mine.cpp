@@ -81,6 +81,7 @@ extern int LastAttackDelay;
 extern int LastActionX;
 extern int LastActionY;
 extern int AlarmDelay;
+extern const int kAttackAlarmFrames;
 extern short AlarmSoundID;
 void GoToMineLink( OneObject* OBJ )
 {
@@ -153,7 +154,7 @@ GGG1:
 								AddEffect( ( mapx << 5 ) + 500, ( mapy << 4 ) + 300, AlarmSoundID );
 								LastActionX = OBJ->RealX;
 								LastActionY = OBJ->RealY;
-								AlarmDelay = 60;
+								AlarmDelay = kAttackAlarmFrames;
 							};
 						};
 						OB->NNUM = OBJ->NNUM;

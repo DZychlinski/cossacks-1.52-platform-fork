@@ -581,10 +581,20 @@ inline int GetAINation(){
 };
 
 
+#ifdef AI_DEBUG_CHAT
+// Fork: debug chat. Bound with plain GetProcAddress (no error box), so the DLL also loads with an exe
+// that lacks AIReportProject; the engine reports accepted building projects in the chat.
+typedef void tpAIReportProject(GAMEOBJ* UnitType);
+tpAIReportProject* lpAIReportProject=NULL;
+#endif
 typedef bool tpTryUnit(GAMEOBJ* UnitType,int Max,byte CostPercent,byte Probability);
 tpTryUnit* lpTryUnit=NULL;
 inline bool TryUnit(GAMEOBJ* UnitType,int Max,byte CostPercent,byte Probability){
-	return lpTryUnit(UnitType,Max,CostPercent,Probability);
+	bool ok=lpTryUnit(UnitType,Max,CostPercent,Probability);
+#ifdef AI_DEBUG_CHAT
+	if(ok && lpAIReportProject) lpAIReportProject(UnitType);
+#endif
+	return ok;
 };
 
 
@@ -1041,6 +1051,9 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 					MessageBox(NULL,"Can not detect DMCR.EXE","ERROR!",0);
 					return TRUE;
 				}else{
+#ifdef AI_DEBUG_CHAT
+					lpAIReportProject=(tpAIReportProject*)GetProcAddress(hLib,"AIReportProject");
+#endif
 					LOADF(RegisterUnits);
 					LOADF(RegisterString);
 					LOADF(RegisterSound);

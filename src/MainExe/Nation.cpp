@@ -1037,6 +1037,8 @@ extern int LastAttackDelay;
 int LastAttackX = -1;
 int LastAttackY = -1;
 int AlarmDelay = 0;
+// Frames the "under attack" marker flashes on the minimap (fork: 4x the original 60)
+extern const int kAttackAlarmFrames = 240;
 int GetUnitActivity( OneObject* OB );
 void DamageInside( OneObject* OB, int Dam, OneObject* Sender, byte AttType )
 {
@@ -1161,7 +1163,7 @@ void OneObject::MakeDamage( int Fundam, int Persist, OneObject* Sender, byte Att
 				LastActionY = RealY >> 4;
 				LastAttackX = RealX;
 				LastAttackY = RealY;
-				AlarmDelay = 60;
+				AlarmDelay = kAttackAlarmFrames;
 			};
 		};
 	};
@@ -1200,7 +1202,7 @@ void OneObject::MakeDamage( int Fundam, int Persist, OneObject* Sender, byte Att
 				AddEffect( ( mapx << 5 ) + 500, ( mapy << 4 ) + 300, AlarmSoundID );
 				LastAttackX = RealX;
 				LastAttackY = RealY;
-				AlarmDelay = 60;
+				AlarmDelay = kAttackAlarmFrames;
 			};
 		};
 		Die();

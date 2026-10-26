@@ -2713,6 +2713,7 @@ void DrawMinAZonesVis(int x, int y);
 extern int LastAttackX;
 extern int LastAttackY;
 extern int AlarmDelay;
+extern const int kAttackAlarmFrames;
 extern IconSet UpgPanel;
 extern IconSet AblPanel;
 void DrawMinAZonesVis(int x, int y);
@@ -2956,7 +2957,7 @@ void GMiniShow()
 		SetRLCWindow(minix, miniy, MiniLx, MiniLy, SCRSizeX);
 		int x0 = minix - MiniX + (LastAttackX >> (9 + ADDSH));
 		int y0 = miniy - MiniY + (LastAttackY >> (9 + ADDSH));
-		int R = ((60 - AlarmDelay) % 10) * 2;
+		int R = ((kAttackAlarmFrames - AlarmDelay) % 10) * 2;
 		Xbar(x0 - R, y0 - R, R + R, R + R, 0xFF);
 		AlarmDelay--;
 		SetRLCWindow(0, 0, COPYSizeX, RSCRSizeY, SCRSizeX);

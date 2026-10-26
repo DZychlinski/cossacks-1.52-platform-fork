@@ -1221,6 +1221,7 @@ extern "C" __declspec( dllexport ) void ClearSelection( byte Nat );
 
 extern short AlarmSoundID;
 extern int AlarmDelay;
+extern const int kAttackAlarmFrames;
 
 extern "C" __declspec( dllexport ) void ShowAlarm( GAMEOBJ* Zone )
 {
@@ -1250,7 +1251,7 @@ extern "C" __declspec( dllexport ) void ShowAlarm( GAMEOBJ* Zone )
 	AddEffect( ( mapx << 5 ) + 500, ( mapy << 4 ) + 300, AlarmSoundID );
 	LastActionX = x << 4;
 	LastActionY = y << 4;
-	AlarmDelay = 60;
+	AlarmDelay = kAttackAlarmFrames;
 }
 
 extern "C" __declspec( dllexport ) void SelectUnitsInZone( GAMEOBJ* Zone, byte Nation, bool add )
@@ -5035,6 +5036,36 @@ extern "C" __declspec( dllexport ) int GetAINation()
 }
 
 extern byte CannonState;
+
+extern const int kChatMessageDisplayTime;
+
+// Fork: debug chat for AI DLLs built with AI_DEBUG_CHAT (CMake option COS_AI_DEBUG_CHAT): the DLL
+// calls this when TryUnit accepted a project. Only buildings are reported, in the AI's colour, at
+// most once per nation and building type every AIReportIntervalMs. Display only (no game state).
+extern "C" __declspec( dllexport ) void AIReportProject( GAMEOBJ* UnitType )
+{
+	const DWORD AIReportIntervalMs = 20000;
+	static DWORD LastReport[8][2048];
+	if ( !AiIsRunNow || !UnitType || UnitType->Type != 'UTYP' || UnitType->Index >= 2048 )
+	{
+		return;
+	}
+	GeneralObject* GO = CNAT->Mon[UnitType->Index];
+	if ( !GO || !GO->newMons->Building )
+	{
+		return;
+	}
+	byte NI = CNAT->NNUM;
+	DWORD now = GetTickCount();
+	if ( LastReport[NI][UnitType->Index] && now - LastReport[NI][UnitType->Index] < AIReportIntervalMs )
+	{
+		return;
+	}
+	LastReport[NI][UnitType->Index] = now;
+	char msg[256];
+	sprintf( msg, "AI: building %s", GO->Message );
+	CreateTimedHintEx( msg, kChatMessageDisplayTime, 16 + NatRefTBL[NI] );
+}
 
 extern "C" __declspec( dllexport ) bool TryUnit( GAMEOBJ* UnitType, int Max, byte CostPercent, byte Probability )
 {

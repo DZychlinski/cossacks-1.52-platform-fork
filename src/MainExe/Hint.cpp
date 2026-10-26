@@ -17,7 +17,7 @@
 #include "recorder.h"
 
 //Duration in ms for various messages and hints
-extern const int kChatMessageDisplayTime = 10000;
+extern const int kChatMessageDisplayTime = 20000; // fork: doubled from 10000
 extern const int kImportantMessageDisplayTime = 5000;
 extern const int kSystemMessageDisplayTime = 3000;
 extern const int kMinorMessageDisplayTime = 1500;

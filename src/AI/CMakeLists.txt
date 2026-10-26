@@ -10,6 +10,10 @@ set(AI_NATIONS
     Switzerland/Switzerland Vengria/Vengria
 )
 
+# Debug chat: the AI announces in the chat which buildings it decides to build (Ai.h, AI_DEBUG_CHAT);
+# also shows that the rebuilt DLLs are the ones in use.
+option(COS_AI_DEBUG_CHAT "AI reports its building decisions in the in-game chat" OFF)
+
 foreach(AI_SRC ${AI_NATIONS})
     get_filename_component(AI_NAME ${AI_SRC} NAME)
     string(TOUPPER ${AI_NAME} AI_NAME_UPPER)
@@ -20,6 +24,9 @@ foreach(AI_SRC ${AI_NATIONS})
         _WINDOWS _MBCS _USRDLL ${AI_NAME_UPPER}_EXPORTS
         _CRT_SECURE_NO_WARNINGS
     )
+    if(COS_AI_DEBUG_CHAT)
+        target_compile_definitions(AI_${AI_NAME} PRIVATE AI_DEBUG_CHAT)
+    endif()
     # VC6 scoping of for-loop variables (they leak into the enclosing scope)
     target_compile_options(AI_${AI_NAME} PRIVATE /Zc:forScope-)
     target_include_directories(AI_${AI_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -253,6 +253,13 @@ population (7 places above 10 population … 60 above 80). The fork adds: above 
 at least 100 places free. This applies to every computer player, including the three nations
 without AI source.
 
+**Debug chat.** Configure with `-DCOS_AI_DEBUG_CHAT=ON` (default OFF) to make the rebuilt AI announce
+its building decisions in the in-game chat, in its player colour: `AI: building <name>`, at most once
+per building type and computer player every 20 seconds. It also proves the rebuilt DLLs are the ones
+in use: the shipped DLLs never post these messages. The DLL calls the engine export
+`AIReportProject` whenever `TryUnit` accepts a building project; the message is display only and
+does not affect the game.
+
 ## Changes from upstream
 
 | Change | Why |
@@ -278,6 +285,9 @@ without AI source.
 | `COS_USE_REBUILT_AI` CMake option (ON) with an `AI_Deploy` target copying the rebuilt AI DLLs into `ai\` next to the exe | Plays against the AI built from source; it runs after `dmcr`'s post-build step, which copies the shipped `ai/` folder. |
 | `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile) and unlimited 18c barracks (≤30%) | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
 | `Megapolis.cpp`: computer players above 500 population keep at least 100 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
+| `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
+| Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
+| The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |
 
 ## Possible future work
 
