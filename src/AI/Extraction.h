@@ -3,7 +3,8 @@
 #define AI_OPTIONAL_CENTERS              5    // Town Centres 3..5 right after the 2-Town-Centre gate
 #define AI_OPTIONAL_CENTERS_COST_PERCENT 75
 #define AI_KAZ18_MAX                     1000 // 18c barracks: no practical count limit beyond the first 3
-#define AI_KAZ18_COST_PERCENT            30
+#define AI_KAZ18_COST_PERCENT            90   // 18c barracks are the AI's key military building
+#define AI_XVIII_COST_PERCENT            98   // unchanged value, but now proposed first (top of Buildings)
 #define AI_OPTIONAL_STOREHOUSES          4    // Storehouses 2..4 next to the optional Town Centres
 #define AI_OPTIONAL_STOREHOUSES_COST_PERCENT 50
 void DoFish(){
@@ -286,7 +287,7 @@ void Upgrades(){
 	if(GetUnits(&STABLE))
 		TryUpgrade(&FASTHORSE, 98, 100);
 	
-	TryUpgrade(&XVIII, 98, 100);	
+	// Fork: TryUpgrade(&XVIII) moved to the top of Buildings()
 	
 	if(GetUnits(&KAZ18)){
 		TryUpgrade(&AKASBUIL, 100, 100);
@@ -298,6 +299,8 @@ void WaterBuildings(){
 };
 
 void Buildings(){
+	// Fork: the 18th century goes first in the project list, ahead of all buildings and upgrades
+	TryUpgrade(&XVIII, AI_XVIII_COST_PERCENT, 100);
 	
 	TryUnit(&KAZ18, 3, 100, 100);
 	TryUnit(&KAZ18, AI_KAZ18_MAX, AI_KAZ18_COST_PERCENT, 100);
@@ -525,7 +528,7 @@ void Market(){
 		*/
 		// PrepareUpgrade(&XVIII)
 		//if(UpgIsRun(&FASTHORSE) && !UpgIsRun(&XVIII)){
-		if(UpgIsRun(&AKASTN2) && !UpgIsRun(&XVIII)){
+		if(UpgIsRun(&AKAWOOD) && !UpgIsRun(&XVIII)){ // Fork: was UpgIsRun(&AKASTN2), saving started too late
 			if(AI_SetRes(FoodID, (GetUpgradeCost(AiNat, &XVIII, FoodID)*11)/10, StoneID))
 				// buy gold
 				if(AI_SetRes(GoldID, (GetUpgradeCost(AiNat, &XVIII, GoldID)*105)/100, StoneID))

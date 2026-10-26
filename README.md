@@ -246,7 +246,8 @@ optional: the AI builds it when it can afford it and otherwise carries on with t
 |---|---|
 | Town Centres 3–5 are optional right after the "2 Town Centres finished" gate (before: the 4th came late behind a gate, the 5th only after the 18th century and the Academy building upgrade) | up to `AI_OPTIONAL_CENTERS` = 5, at most `AI_OPTIONAL_CENTERS_COST_PERCENT` = 75% of the stockpile |
 | Storehouses 2–4 are optional right after the same gate (before: 1 until 4 Town Centres were finished) | up to `AI_OPTIONAL_STOREHOUSES` = 4, at most `AI_OPTIONAL_STOREHOUSES_COST_PERCENT` = 50% of the stockpile |
-| 18c barracks: no count limit beyond the original first 3 (before: max 3, later 6) | `AI_KAZ18_MAX` = 1000, at most `AI_KAZ18_COST_PERCENT` = 30% of the stockpile; each barracks costs twice the previous one, which limits them naturally |
+| 18c barracks: no count limit beyond the original first 3 (before: max 3, later 6) | `AI_KAZ18_MAX` = 1000, at most `AI_KAZ18_COST_PERCENT` = 90% of the stockpile; each barracks costs twice the previous one, which limits them naturally |
+| 18th century first: it is proposed at the top of `Buildings()`, ahead of every building and upgrade (before: at the end of `Upgrades()`), and the market starts saving food, gold and iron for it once the Academy's AKAWOOD upgrade runs (before: only after the later AKASTN2) | `AI_XVIII_COST_PERCENT` = 98% (unchanged) |
 
 Houses are built by the engine, not the AI script (`City` logic in `src/MainExe/Megapolis.cpp`): a
 computer player adds a house when its free population capacity drops below a buffer that grows with
@@ -284,7 +285,7 @@ does not affect the game.
 | MSVC post-build step in `src/MainExe/CMakeLists.txt` (+ `src/cmake/copy_missing.cmake`) copies the SDL DLLs, `ai/` and `data_min/` next to the exe | The game switches to the exe folder at startup and opens these by relative path. See [Running](#running). |
 | Added the nation AI sources (`src/AI/`, AI Pack v0.995) and a CMake subproject building 17 AI DLLs into `ai_rebuilt/` (MSVC only; flags `/Zc:forScope-` for VC6 loop scoping, static CRT as originally, `/NODEFAULTLIB:..\dmcr.lib` for an obsolete pragma in `Ai.h`). No source edits. | Lets the AI be changed and rebuilt like the rest of the game. See [Nation AI sources](#nation-ai-sources). |
 | `COS_USE_REBUILT_AI` CMake option (ON) with an `AI_Deploy` target copying the rebuilt AI DLLs into `ai\` next to the exe | Plays against the AI built from source; it runs after `dmcr`'s post-build step, which copies the shipped `ai/` folder. |
-| `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile), optional Storehouses 2–4 (≤50%) and unlimited 18c barracks (≤30%) | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
+| `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile), optional Storehouses 2–4 (≤50%), unlimited 18c barracks (≤90%), 18th century first and saved for earlier | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
 | `Megapolis.cpp`: computer players above 500 population keep at least 80 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
 | `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
