@@ -5044,28 +5044,54 @@ void CreateChatHint( char* s, byte opt ); // Hint.cpp: chat message with game-ti
 // most once per nation and building type every AIReportIntervalMs. Display only (no game state).
 extern "C" __declspec( dllexport ) void AIReportProject( GAMEOBJ* UnitType )
 {
+	// UnitType is a unit type ('UTYP', only buildings are reported) or an upgrade ('UPGR')
 	const DWORD AIReportIntervalMs = 20000;
 	static DWORD LastReport[8][2048];
-	if ( !AiIsRunNow || !UnitType || UnitType->Type != 'UTYP' || UnitType->Index >= 2048 )
+	static DWORD LastUpgradeReport[8][4096];
+	if ( !AiIsRunNow || !UnitType )
 	{
 		return;
 	}
-	GeneralObject* GO = CNAT->Mon[UnitType->Index];
-	if ( !GO || !GO->newMons->Building )
-	{
-		return;
-	}
+	const char* action;
+	const char* name;
+	DWORD* last;
 	byte NI = CNAT->NNUM;
-	DWORD now = GetTickCount();
-	if ( LastReport[NI][UnitType->Index] && now - LastReport[NI][UnitType->Index] < AIReportIntervalMs )
+	if ( UnitType->Type == 'UTYP' && UnitType->Index < 2048 )
+	{
+		GeneralObject* GO = CNAT->Mon[UnitType->Index];
+		if ( !GO || !GO->newMons->Building )
+		{
+			return;
+		}
+		action = "building";
+		name = GO->Message;
+		last = &LastReport[NI][UnitType->Index];
+	}
+	else if ( UnitType->Type == 'UPGR' && UnitType->Index < CNAT->NUpgrades )
+	{
+		NewUpgrade* NU = CNAT->UPGRADE[UnitType->Index];
+		if ( !NU )
+		{
+			return;
+		}
+		action = "researching";
+		name = NU->Message ? NU->Message : NU->Name;
+		last = &LastUpgradeReport[NI][UnitType->Index];
+	}
+	else
 	{
 		return;
 	}
-	LastReport[NI][UnitType->Index] = now;
+	DWORD now = GetTickCount();
+	if ( *last && now - *last < AIReportIntervalMs )
+	{
+		return;
+	}
+	*last = now;
 	char msg[256];
 	snprintf( msg, sizeof( msg ),
-		"AI: building %s | food %d wood %d stone %d gold %d iron %d coal %d | pop %d/%d",
-		GO->Message, XRESRC( NI, FoodID ), XRESRC( NI, TreeID ), XRESRC( NI, StoneID ),
+		"AI: %s %s | food %d wood %d stone %d gold %d iron %d coal %d | pop %d/%d",
+		action, name, XRESRC( NI, FoodID ), XRESRC( NI, TreeID ), XRESRC( NI, StoneID ),
 		XRESRC( NI, GoldID ), XRESRC( NI, IronID ), XRESRC( NI, CoalID ),
 		CNAT->NGidot, CNAT->NFarms );
 	CreateChatHint( msg, 16 + NatRefTBL[NI] );

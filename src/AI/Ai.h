@@ -583,7 +583,7 @@ inline int GetAINation(){
 
 #ifdef AI_DEBUG_CHAT
 // Fork: debug chat. Bound with plain GetProcAddress (no error box), so the DLL also loads with an exe
-// that lacks AIReportProject; the engine reports accepted building projects in the chat.
+// that lacks AIReportProject; the engine reports accepted building and upgrade projects in the chat.
 typedef void tpAIReportProject(GAMEOBJ* UnitType);
 tpAIReportProject* lpAIReportProject=NULL;
 #endif
@@ -601,7 +601,11 @@ inline bool TryUnit(GAMEOBJ* UnitType,int Max,byte CostPercent,byte Probability)
 typedef bool tpTryUpgrade(GAMEOBJ* Upgrade,int CostPercent,int Probability);
 tpTryUpgrade* lpTryUpgrade=NULL;
 inline bool TryUpgrade(GAMEOBJ* Upgrade,int CostPercent,int Probability){
-	return lpTryUpgrade(Upgrade,CostPercent,Probability);
+	bool ok=lpTryUpgrade(Upgrade,CostPercent,Probability);
+#ifdef AI_DEBUG_CHAT
+	if(ok && lpAIReportProject) lpAIReportProject(Upgrade);
+#endif
+	return ok;
 };
 
 
