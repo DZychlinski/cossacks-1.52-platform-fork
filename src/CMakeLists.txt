@@ -71,3 +71,8 @@ endif()
 if(BUILD_INTEXPLORER)
     add_subdirectory(IntExplorer)
 endif()
+
+# Nation AI DLLs (AI Pack sources in AI/)
+if(MSVC)
+    add_subdirectory(AI)
+endif()

@@ -213,6 +213,23 @@ file (default `en`); files missing from that language fall back to `en`, as in t
 next to the exe, so the exe folder must be writable. Files there also take precedence over the data
 folder.
 
+## Nation AI sources
+
+`src/AI/` holds the source of the computer opponents: the community **AI Pack v0.995** (2002,
+originally Visual C++ 6), covering 17 nations. There is no source for Algeria, Turkey and Ukraine.
+The 20 shipped DLLs in `ai/` are byte-identical to the original Back to War ones, and every game
+identifier in them appears in this source, so they were very likely built from it. Its readme is in
+`src/AI/AI/AIPack Readme.txt`; `src/AI/variants/` keeps alternative Bavaria/Russia versions and a
+newer `Extraction.h` for reference (not built).
+
+The MSVC build compiles one DLL per nation (`src/AI/CMakeLists.txt`) into
+`src/out/build/win32-release/MainExe/Release/ai_rebuilt/`. The game still loads the shipped DLLs
+from `ai/`; the rebuilt ones are not used yet. The AI finds engine functions at runtime by name
+(`GetProcAddress(GetModuleHandle("DMCR.EXE"), ...)` in `Ai.h`), so the exe must keep the name
+`dmcr.exe`.
+
+The sources are Windows-1251 encoded; keep that encoding when editing them.
+
 ## Changes from upstream
 
 | Change | Why |
@@ -234,6 +251,7 @@ folder.
 | `Cwave.cpp`: sound effects are opened from the exe folder, then the data folder (via `cos_native_path`) under `_MSC_VER` | The real Windows `mmioOpen` resolved `Sound\*.wav` against the exe folder only, so no effect loaded (music, loaded through `DeviceCD.cpp`, was unaffected). Non-Windows builds already did this inside the `mmioOpen` stand-in in `platform/mmsystem.h`. |
 | `/local/...` (user files) maps to the exe folder instead of a `UserData\` subfolder | With `UserData\`, user files were split: `Gopen` (settings, `players.txt`) wrote to the exe folder but read from `UserData\`, and saves were written to `UserData\` but listed with `FindFirstFile("*.sav")` in the exe folder. So saves, options and the profile seemed lost on restart. The exe folder is also where the original game kept them. |
 | MSVC post-build step in `src/MainExe/CMakeLists.txt` (+ `src/cmake/copy_missing.cmake`) copies the SDL DLLs, `ai/` and `data_min/` next to the exe | The game switches to the exe folder at startup and opens these by relative path. See [Running](#running). |
+| Added the nation AI sources (`src/AI/`, AI Pack v0.995) and a CMake subproject building 17 AI DLLs into `ai_rebuilt/` (MSVC only; flags `/Zc:forScope-` for VC6 loop scoping, static CRT as originally, `/NODEFAULTLIB:..\dmcr.lib` for an obsolete pragma in `Ai.h`). No source edits. | Lets the AI be changed and rebuilt like the rest of the game. See [Nation AI sources](#nation-ai-sources). |
 
 ## Possible future work
 
