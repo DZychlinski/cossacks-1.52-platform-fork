@@ -153,12 +153,39 @@ cmake --build out/build/win32-release --config Release
 
 The `.sln` files are not used: they target the VS 2015/2019 toolsets and do not include `platform/`.
 
-**Status:** `dmcr.exe` builds and links (`src/out/build/win32-release/MainExe/Release/dmcr.exe`).
-It has not been run yet. Not yet in the build output: the runtime files the exe needs next to it
-(`SDL2.dll`, `SDL2_mixer.dll`, `ai/`, ...).
+**Status:** `dmcr.exe` builds and links. It has not been tested in play yet.
 
-**Game data.** The exe reads the unpacked `data/<lang>/` tree of the web build (from the full source
-archive linked under [Building from Source](#building-from-source)). On first use it looks for:
+## Running
+
+The build puts the exe and its runtime files in `src/out/build/win32-release/MainExe/Release/`:
+
+| File(s) | Source | Copied |
+|---|---|---|
+| `dmcr.exe` | the build | — |
+| `SDL2.dll`, `SDL2_mixer.dll`, `libogg-0.dll`, `libopus*.dll`, ... | `src/MainExe/sdl`, `src/MainExe/SDL2_mixer` | every build |
+| `ai\*.dll` (nation AI) | `ai/` | every build |
+| `cew.dll`, `agew_1.pal`, `*.opt`, `mode.dat`, `rec.dat`, `MuliExOpt.dat` | `data_min/` | only when missing (the game rewrites the settings files) |
+
+The one thing to add by hand is the **game data**, which is not in this repository: the `data` folder
+(containing `en\`, `ru\`, ...) from the full source archive linked under
+[Building from Source](#building-from-source). Either copy it next to the exe:
+
+```
+Release\
+├── dmcr.exe
+├── SDL2.dll, SDL2_mixer.dll, ...
+├── ai\
+├── cew.dll, *.opt, *.dat, agew_1.pal
+└── data\
+    ├── en\        (contains manifest.txt)
+    └── ru\ ...
+```
+
+or keep it anywhere and pick it in the folder dialog on first run. Then start `dmcr.exe`. The whole
+`Release` folder can be copied elsewhere as a portable install, as long as it stays writable.
+
+**Game data lookup.** The exe reads the unpacked `data/<lang>/` tree of the web build. On first use it
+looks for:
 
 1. `[Data] DataDir` in `cossacks_native.ini` next to the exe;
 2. `data\` next to the exe;
@@ -184,7 +211,9 @@ options go to `UserData\` next to the exe, so the exe folder must be writable.
 | `MPlayerStub.cpp`: `DPL_CreatePlayer` stub returns `bool` | `Interface.cpp` declares it `bool`; MSVC includes the return type in the mangled name, so the `void` stub did not link. |
 | New `MainExe/NativeStubs.cpp` (MSVC only): inert IChat lobby/chat functions, IntExplorer access keys, and the web relay `cosn_*` functions | The native build does not compile IChat/IntExplorer or the JavaScript relay. The internet lobby is therefore unavailable natively; single-player, LAN and direct-IP play are unaffected. |
 | Windows builds no longer link `SDL2main`; MSVC builds a GUI-subsystem exe (`WIN32_EXECUTABLE`) | The game defines its own `WinMain` (`Ddex1.cpp`); `SDL2main` replaced it with a `main` that calls a nonexistent `SDL_main`. |
-| New `MainExe/NativeData.cpp`/`.h` (MSVC only): native `cos_data_init`, `cos_fetch_file`, `cos_persist_soon` and `cos_native_path`; `Arc/GSCset.cpp` and `DeviceCD.cpp` route their `/game/...`, `/local/...` and `/manifest.txt` paths through `cos_native_path` under `_MSC_VER` | In the web build those virtual paths and functions come from JavaScript (`web/cos_data.js`). The native loader maps them to the data folder and `UserData\` as described under **Game data** above. Web and GCC/Clang code paths are unchanged. |
+| New `MainExe/NativeData.cpp`/`.h` (MSVC only): native `cos_data_init`, `cos_fetch_file`, `cos_persist_soon` and `cos_native_path`; `Arc/GSCset.cpp` and `DeviceCD.cpp` route their `/game/...`, `/local/...` and `/manifest.txt` paths through `cos_native_path` under `_MSC_VER` | In the web build those virtual paths and functions come from JavaScript (`web/cos_data.js`). The native loader maps them to the data folder and `UserData\` as described under **Game data lookup** above. Web and GCC/Clang code paths are unchanged. |
+| `ActiveScenary.cpp`: mission DLLs are loaded from the data folder (via `cos_native_path`) under `_MSC_VER` | The game passes data-relative names such as `Missions\...\x.dll`; natively `LoadLibrary` would look for them next to the exe. |
+| MSVC post-build step in `src/MainExe/CMakeLists.txt` (+ `src/cmake/copy_missing.cmake`) copies the SDL DLLs, `ai/` and `data_min/` next to the exe | The game switches to the exe folder at startup and opens these by relative path. See [Running](#running). |
 
 ## Possible future work
 

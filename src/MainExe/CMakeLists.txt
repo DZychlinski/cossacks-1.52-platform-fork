@@ -183,6 +183,22 @@ if(WIN32)
     endif()
 endif()
 
+# Runtime files next to the exe (the game chdirs to the exe folder and opens these by relative path).
+# SDL DLLs (+ optional codec DLLs) and ai/ are refreshed every build; data_min/ holds settings the game
+# rewrites (rec.dat, mode.dat, *.opt), so its files are only copied when missing.
+if(MSVC)
+    file(GLOB SDL_MIXER_OPTIONAL_DLLS "${SDL2_MIXER_LIB_DIR}/optional/*.dll")
+    set(COS_REPO_ROOT "${CMAKE_SOURCE_DIR}/..")
+    add_custom_command(TARGET dmcr POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SDL2_LIB_DIR}/SDL2.dll" "${SDL2_MIXER_LIB_DIR}/SDL2_mixer.dll" ${SDL_MIXER_OPTIONAL_DLLS}
+            "$<TARGET_FILE_DIR:dmcr>"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${COS_REPO_ROOT}/ai" "$<TARGET_FILE_DIR:dmcr>/ai"
+        COMMAND ${CMAKE_COMMAND} -DSRC=${COS_REPO_ROOT}/data_min -DDST=$<TARGET_FILE_DIR:dmcr>
+            -P "${CMAKE_SOURCE_DIR}/cmake/copy_missing.cmake"
+        VERBATIM)
+endif()
+
 # Disable precompiled headers (only 3 files use stdafx.h in original project)
 # Suppress warnings
 if(MSVC)

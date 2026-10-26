@@ -4,6 +4,9 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+#ifdef _MSC_VER
+#include "NativeData.h"
+#endif
 #include "ResFile.h"
 #include "Fastdraw.h"
 #include "MapDiscr.h"
@@ -591,7 +594,19 @@ void ScenaryInterface::Load(char* Name, char* Text)
 		// path module match, so the ambiguous "Mission" stem fallback loaded the FIRST Mission.dll
 		// (Algeria/Missal01) for EVERY mission -> wrong script on every map -> 100+ registration
 		// errors -> handler silently NULLed. That was the "no mission works" root.
+#ifdef _MSC_VER
+		// Native: the mission DLL lives in the data folder, not next to the exe.
+		char vp[600], rp[600];
+		const char* rel = Name;
+		while (*rel == '.' || *rel == '\\' || *rel == '/') rel++;   // drop a leading .\ or /
+		snprintf(vp, sizeof vp, "/game/%s", rel);
+		for (char* c = vp; *c; c++) if (*c == '\\') *c = '/';
+		cos_native_path(vp, rp, sizeof rp);
+		for (char* c = rp; *c; c++) if (*c == '/') *c = '\\';     // LoadLibrary needs backslashes
+		hLib = LoadLibrary(rp);
+#else
 		hLib = LoadLibrary(Name);
+#endif
 	}
 
 	ScenaryHandler = NULL;
