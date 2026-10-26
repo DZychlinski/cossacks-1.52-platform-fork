@@ -262,8 +262,11 @@ static void _dmcr_early_init(void) {
 }
 #ifdef _MSC_VER
 // MSVC equivalent of constructor(101): .CRT$XCT runs before the .CRT$XCU user constructors.
+// Nothing references the pointer, so it must be extern and /include'd or the linker drops it
+// (and with it the crash handlers installed by _dmcr_early_init).
 #pragma section(".CRT$XCT", read)
-__declspec(allocate(".CRT$XCT")) static void (__cdecl* _dmcr_early_init_ptr)(void) = _dmcr_early_init;
+extern "C" __declspec(allocate(".CRT$XCT")) void (__cdecl* _dmcr_early_init_ptr)(void) = _dmcr_early_init;
+#pragma comment(linker, "/include:__dmcr_early_init_ptr")
 #endif
 #endif
 

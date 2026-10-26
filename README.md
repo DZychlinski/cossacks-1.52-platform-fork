@@ -184,6 +184,19 @@ Release\
 or keep it anywhere and pick it in the folder dialog on first run. Then start `dmcr.exe`. The whole
 `Release` folder can be copied elsewhere as a portable install, as long as it stays writable.
 
+**Logs and crashes.** The exe writes these next to itself:
+
+| File | Contents |
+|---|---|
+| `dmcr_early.log` | Written at startup, before any game code runs; confirms the crash handlers are installed |
+| `dmcr_debug.log` | Startup steps (window, sound, video init, menus) |
+| `dmcr_stderr.log` | Runtime messages (sound loading, AI, clicks, ...) |
+| `dmcr_crash.log` | Written on a crash: exception, registers, and a stack trace with module offsets |
+
+`dmcr.pdb` (debug symbols) is built next to the exe. To see a crash at source level, open `dmcr.exe`
+in Visual Studio (File → Open → Project/Solution, select the exe), start it with F5, and reproduce
+the crash: the debugger stops at the faulting line with the call stack.
+
 **Game data lookup.** The exe reads the unpacked `data/<lang>/` tree of the web build. On first use it
 looks for:
 
@@ -206,7 +219,8 @@ options go to `UserData\` next to the exe, so the exe folder must be writable.
 | `platform_types.h` and `MPlayerStub.cpp` include `winsock2.h` before `windows.h` | Otherwise `windows.h` pulls in the legacy `winsock.h`, which clashes with `winsock2.h`. |
 | Renamed `MainExe/Process.h` to `ProcessInfo.h` | It hid the CRT `<process.h>` that the C++ `<thread>` header needs. |
 | 32-bit builds target Windows 7 instead of XP | MSVC v143 cannot target XP, and the XP target hid `RtlCaptureStackBackTrace` used by the crash logger. |
-| Small MSVC equivalents in `Ddex1.cpp` (early-init hook via `.CRT$XCT` instead of `__attribute__((constructor))`), `Ddini.cpp` (`F_OK`), `GSCset.cpp` (`mkdir` → `_mkdir`) | GCC-only constructs. |
+| Small MSVC equivalents in `Ddex1.cpp` (early-init hook via `.CRT$XCT` instead of `__attribute__((constructor))`, kept with `/include` so the linker does not drop it), `Ddini.cpp` (`F_OK`), `GSCset.cpp` (`mkdir` → `_mkdir`) | GCC-only constructs. The early-init hook installs the crash handlers that write `dmcr_crash.log`. |
+| MSVC Release builds also produce `dmcr.pdb` (`/Zi`, `/DEBUG /OPT:REF /OPT:ICF`) | Lets Visual Studio show crashes at source level without a separate debug build. |
 | MSVC builds use `MPlayerStub.cpp` instead of `MPlayer.cpp`; `dplayx.lib` is no longer linked; `DirectPlayLobbyCreateA` stub declared `WINAPI` | `MPlayerStub.cpp` is the CommCore multiplayer with the 1.52 direct-IP rework used by every other build. `MPlayer.cpp` uses DirectPlay, a legacy Windows component players would have to enable by hand. |
 | `MPlayerStub.cpp`: `DPL_CreatePlayer` stub returns `bool` | `Interface.cpp` declares it `bool`; MSVC includes the return type in the mangled name, so the `void` stub did not link. |
 | New `MainExe/NativeStubs.cpp` (MSVC only): inert IChat lobby/chat functions, IntExplorer access keys, and the web relay `cosn_*` functions | The native build does not compile IChat/IntExplorer or the JavaScript relay. The internet lobby is therefore unavailable natively; single-player, LAN and direct-IP play are unaffected. |

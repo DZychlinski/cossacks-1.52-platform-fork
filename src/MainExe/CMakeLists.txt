@@ -204,6 +204,9 @@ endif()
 if(MSVC)
     target_compile_definitions(dmcr PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(dmcr PRIVATE /wd4996 /wd4200)
+    # Debug symbols (dmcr.pdb) in Release too, so crashes can be traced in Visual Studio
+    target_compile_options(dmcr PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_link_options(dmcr PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(dmcr PRIVATE
         -Wno-deprecated-declarations

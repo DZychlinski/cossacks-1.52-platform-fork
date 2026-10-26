@@ -23,3 +23,6 @@ x86/dll/England/
 # Dependencies / caches
 node_modules/
 __pycache__/
+
+# Visual Studio project build logs
+src/Temp/**/*.log
