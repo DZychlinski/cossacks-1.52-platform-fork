@@ -1221,6 +1221,262 @@ void City::EnumProp()
 #include "AILog.h"
 #endif
 #define FARMID 20
+
+static bool ProducerHasUsage(Nation* nation, word producerType, byte usage)
+{
+	if (producerType >= nation->NMon || !nation->PAble[producerType])return false;
+	for (int i = 0; i < nation->PACount[producerType]; i++)
+	{
+		word unitType = nation->PAble[producerType][i];
+		if (unitType < nation->NMon && nation->Mon[unitType]->newMons->Usage == usage)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static word FindInsaneProducerType(Nation* nation, byte requiredUsage, bool requireMixedCavalry)
+{
+	for (word i = 0; i < nation->NMon; i++)
+	{
+		GeneralObject* producer = nation->Mon[i];
+		if (!producer || !producer->newMons->Building || !ProducerHasUsage(nation, i, requiredUsage))continue;
+		if (!requireMixedCavalry || ProducerHasUsage(nation, i, FastHorseID) || ProducerHasUsage(nation, i, HardHorceID))
+		{
+			return i;
+		}
+	}
+	return 0xFFFF;
+}
+
+static word FindProducedUnitType(Nation* nation, word producerType, byte usage)
+{
+	if (producerType >= nation->NMon || !nation->PAble[producerType])return 0xFFFF;
+	for (int i = 0; i < nation->PACount[producerType]; i++)
+	{
+		word unitType = nation->PAble[producerType][i];
+		if (unitType < nation->NMon && nation->Mon[unitType]->newMons->Usage == usage)
+		{
+			return unitType;
+		}
+	}
+	return 0xFFFF;
+}
+
+static bool UpgradeAffectsUnitType(const NewUpgrade* upgrade, Nation* nation, word unitType)
+{
+	if (!upgrade || unitType >= nation->NMon)return false;
+	if (upgrade->UnitType == 0)
+	{
+		if (upgrade->UnitGroup)
+		{
+			for (int i = 0; i < upgrade->NUnits; i++)
+			{
+				if (upgrade->UnitGroup[i] == unitType)return true;
+			}
+			return false;
+		}
+		return upgrade->UnitValue == unitType;
+	}
+
+	const byte unitKind = nation->Mon[unitType]->newMons->Kind;
+	if (upgrade->UnitGroup)
+	{
+		for (int i = 0; i < upgrade->NUnits; i++)
+		{
+			if (upgrade->UnitGroup[i] == unitKind)return true;
+		}
+		return false;
+	}
+	return upgrade->UnitValue == unitKind;
+}
+
+static bool IsAcademyProducer(const ProposedProject* project, Nation* nation)
+{
+	OneObject* producer = Group[project->ProducerIndex];
+	if (!producer || producer->NIndex >= nation->NMon)return false;
+	GeneralObject* producerType = nation->Mon[producer->NIndex];
+	for (int i = 0; i < producerType->NUpgrades; i++)
+	{
+		word upgradeID = producerType->Upg[i];
+		if (upgradeID < nation->NUpgrades)
+		{
+			byte category = nation->UPGRADE[upgradeID]->CtgUpgrade;
+			if (category == 20 || category == 21)return true;//wood or stone gathering
+		}
+	}
+	return false;
+}
+
+static int GetInsaneUpgradePriority(const ProposedProject* project, Nation* nation, word pikeType, word dragoonType)
+{
+	if (project->PKind != 1 || project->NIndex >= nation->NUpgrades)return 100;
+	NewUpgrade* upgrade = nation->UPGRADE[project->NIndex];
+	if (upgrade->CtgUpgrade == 20)return 0;//wood gathering
+	if (upgrade->CtgUpgrade == 21)return 1;//stone gathering
+
+	const bool affectsPike = UpgradeAffectsUnitType(upgrade, nation, pikeType);
+	const bool affectsDragoon = UpgradeAffectsUnitType(upgrade, nation, dragoonType);
+	const bool academy = IsAcademyProducer(project, nation);
+	if (upgrade->CtgUpgrade == 5 && affectsDragoon)return 2;//horse production speed
+	if (!academy && (affectsPike || affectsDragoon) && upgrade->CtgUpgrade != 5 && upgrade->CtgUpgrade != 11)
+	{
+		return 3;//unit attack, protection and other direct upgrades
+	}
+	if (academy && upgrade->CtgUpgrade == 12 && affectsDragoon)
+	{
+		return 4;//academy firearm damage
+	}
+	return 100;
+}
+
+static word FindInsaneBuildingProject(City* city, word barracksType, word stableType)
+{
+	if (city->PresentProject)return 0xFFFF;
+	const int peasants = city->UnitAmount[city->Nat->UID_PEASANT];
+	const int desiredBarracks = (peasants >= 18) + (peasants >= 45) + (peasants >= 70);
+	const int desiredStables = (peasants >= 25) + (peasants >= 40) + (peasants >= 55) +
+		(peasants >= 70) + (peasants >= 85) + (peasants >= 100);
+
+	bool needBarracks = barracksType != 0xFFFF && city->UnitAmount[barracksType] < desiredBarracks &&
+		city->PRPIndex[barracksType] != 0xFFFF;
+	bool needStable = stableType != 0xFFFF && city->UnitAmount[stableType] < desiredStables &&
+		city->PRPIndex[stableType] != 0xFFFF;
+	if (needBarracks && needStable)
+	{
+		return city->UnitAmount[stableType] < city->UnitAmount[barracksType] * 2 ?
+			city->PRPIndex[stableType] : city->PRPIndex[barracksType];
+	}
+	if (needBarracks)return city->PRPIndex[barracksType];
+	if (needStable)return city->PRPIndex[stableType];
+	return 0xFFFF;
+}
+
+static void PrependProject(City* city, int& projectCount, word project)
+{
+	if (project == 0xFFFF)return;
+	int oldPosition = -1;
+	for (int i = 0; i < projectCount; i++)
+	{
+		if (city->BestProj[i] == project)
+		{
+			oldPosition = i;
+			break;
+		}
+	}
+	if (oldPosition == 0)return;
+	if (oldPosition > 0)
+	{
+		for (int i = oldPosition; i > 0; i--)city->BestProj[i] = city->BestProj[i - 1];
+	}
+	else
+	{
+		if (projectCount >= 127)return;
+		for (int i = projectCount; i > 0; i--)city->BestProj[i] = city->BestProj[i - 1];
+		projectCount++;
+	}
+	city->BestProj[0] = project;
+}
+
+static void AppendProject(City* city, int& projectCount, word project)
+{
+	if (project == 0xFFFF || projectCount >= 127)return;
+	for (int i = 0; i < projectCount; i++)if (city->BestProj[i] == project)return;
+	city->BestProj[projectCount++] = project;
+}
+
+//Project kinds that Insane must never push behind its own priorities (matched on the produced unit's Usage).
+struct InsaneExemptUsage
+{
+	byte Usage;
+	const char* Reason;
+};
+static const InsaneExemptUsage kInsaneExemptUsages[] =
+{
+	{ FarmID, "houses: the AI already builds them in time for its population target, Insane must not starve it of housing" },
+};
+
+static bool IsInsaneExemptProject(City* city, word project)
+{
+	const ProposedProject* proposal = city->Prop + project;
+	if (proposal->PKind != 0 || proposal->NIndex >= city->Nat->NMon)return false;
+	const byte usage = city->Nat->Mon[proposal->NIndex]->newMons->Usage;
+	for (const InsaneExemptUsage& exempt : kInsaneExemptUsages)
+	{
+		if (exempt.Usage == usage)return true;
+	}
+	return false;
+}
+
+//Stable move of exempt projects (houses) back to the front, keeping their original relative order
+static void KeepExemptProjectsFirst(City* city, int projectCount)
+{
+	int front = 0;
+	for (int i = 0; i < projectCount; i++)
+	{
+		word project = city->BestProj[i];
+		if (!IsInsaneExemptProject(city, project))continue;
+		for (int j = i; j > front; j--)city->BestProj[j] = city->BestProj[j - 1];
+		city->BestProj[front++] = project;
+	}
+}
+
+static int ApplyInsaneStrategy(City* city, int projectCount)
+{
+	if (!g_InsaneAI)return projectCount;
+
+	Nation* nation = city->Nat;
+	const word barracksType = FindInsaneProducerType(nation, LightInfID, false);
+	const word stableType = FindInsaneProducerType(nation, HorseStrelokID, true);
+	const word pikeType = FindProducedUnitType(nation, barracksType, LightInfID);
+	const word dragoonType = FindProducedUnitType(nation, stableType, HorseStrelokID);
+
+	word bestUpgradeProject = 0xFFFF;
+	int bestUpgradePriority = 100;
+	int bestUpgradeLevel = 256;
+	for (int i = 0; i < city->NProp; i++)
+	{
+		ProposedProject* project = city->Prop + i;
+		int priority = GetInsaneUpgradePriority(project, nation, pikeType, dragoonType);
+		if (priority < 100)
+		{
+			int level = nation->UPGRADE[project->NIndex]->Level;
+			if (priority < bestUpgradePriority ||
+				(priority == bestUpgradePriority && level < bestUpgradeLevel) ||
+				(priority == bestUpgradePriority && level == bestUpgradeLevel &&
+					(bestUpgradeProject == 0xFFFF || project->NIndex < city->Prop[bestUpgradeProject].NIndex)))
+			{
+				bestUpgradePriority = priority;
+				bestUpgradeLevel = level;
+				bestUpgradeProject = i;
+			}
+		}
+	}
+
+	word priorityProject = bestUpgradePriority <= 1 ? bestUpgradeProject :
+		FindInsaneBuildingProject(city, barracksType, stableType);
+	if (priorityProject == 0xFFFF)priorityProject = bestUpgradeProject;
+	PrependProject(city, projectCount, priorityProject);
+
+	word pikeProject = pikeType == 0xFFFF ? 0xFFFF : city->PRPIndex[pikeType];
+	word dragoonProject = dragoonType == 0xFFFF ? 0xFFFF : city->PRPIndex[dragoonType];
+	word trainingProject = 0xFFFF;
+	if (pikeProject != 0xFFFF && dragoonProject != 0xFFFF)
+	{
+		trainingProject = city->UnitAmount[pikeType] < city->UnitAmount[dragoonType] * 3 + 72 ?
+			pikeProject : dragoonProject;
+	}
+	else if (pikeProject != 0xFFFF)trainingProject = pikeProject;
+	else trainingProject = dragoonProject;
+	AppendProject(city, projectCount, trainingProject);
+
+	KeepExemptProjectsFirst(city, projectCount);
+
+	city->NBestProjects = projectCount;
+	return projectCount;
+}
+
 word City::FindNeedProject()
 {
 	//Groups calculating
@@ -1237,7 +1493,7 @@ word City::FindNeedProject()
 		static int fnp_dbg_counter = 0;
 		if ((fnp_dbg_counter++ % 200) == 0)
 			fprintf(stderr, "[AI] FindNeedProject: Nat=%d NBestProjects=%d\n", Nat->NNUM, NBestProjects);
-		return NBestProjects;
+		return ApplyInsaneStrategy(this, NBestProjects);
 	};
 
 	int MaxAI = -1;
@@ -1373,7 +1629,7 @@ word City::FindNeedProject()
 
 		};
 	};
-	return npro;
+	return ApplyInsaneStrategy(this, npro);
 }
 
 //Determine possible updates and abilities
@@ -6153,13 +6409,46 @@ void CheckDiversants(City* CT)
 };
 //------------------------------MAIN STRATEGICAL BRAIN---------------------------//
 void SHIP_DIVERSIA(AI_Army* ARM);
+
+static int CountArmyType(const Brigade* brigade, int armyType)
+{
+	int count = 0;
+	for (int i = 0; i < brigade->NMemb; i++)
+	{
+		word member = brigade->Memb[i];
+		if (member != 0xFFFF)
+		{
+			OneObject* object = Group[member];
+			if (object && ArmType[object->Usage] == armyType)count++;
+		}
+	}
+	return count;
+}
+
 void SmartGamer(City* CT)
 {
 	//minimal armies creation from Agressors
 	//assert(CT->NI==1);
 	if (CT->AI_LAND_BATTLE)
 	{
-		int AType = CheckMinArmyCreationAbility(&CT->Agressors);
+		//Insane AI: hold attacks until 180 pikemen + 48 dragoons are ready, then send them together
+		bool combinedInsaneAssault = false;
+		int AType = -1;
+		if (g_InsaneAI && !CT->DefenceStage)
+		{
+			word barracksType = FindInsaneProducerType(CT->Nat, LightInfID, false);
+			word stableType = FindInsaneProducerType(CT->Nat, HorseStrelokID, true);
+			int pikes = CountArmyType(&CT->Agressors, 0);
+			int dragoons = CountArmyType(&CT->Agressors, 4);
+			combinedInsaneAssault = barracksType != 0xFFFF && pikes >= 180 &&
+				(stableType == 0xFFFF || dragoons >= 48);
+			if (combinedInsaneAssault)AType = 0;
+			else if (barracksType == 0xFFFF)AType = CheckMinArmyCreationAbility(&CT->Agressors);
+		}
+		else
+		{
+			AType = CheckMinArmyCreationAbility(&CT->Agressors);
+		}
 		if (AType != -1)
 		{
 			int Aind = CT->GetFreeArmy();
@@ -6175,6 +6464,7 @@ void SmartGamer(City* CT)
 				AI_Army* ARM = CT->ARMS + Aind;
 				ARM->Enabled = true;
 				ARM->CreateMinimalArmyFromBrigade(&CT->Agressors, AType);
+				if (combinedInsaneAssault)ARM->CreateMinimalArmyFromBrigade(&CT->Agressors, 4);
 				ARM->Parad();
 				ARM->MakeBattle();
 			};

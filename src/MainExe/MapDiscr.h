@@ -191,6 +191,10 @@ void AddUN(char* File, int Line, int Param, int Type);
 
 #define rando() RandNew(__FILE__,__LINE__)
 
+//"Insane AI" lobby option (single and multiplayer). 0 or 1, set at game start from the host, same for all players.
+extern byte g_InsaneAI;
+byte SanitizeInsaneAI(int enabled);
+
 //New monster format
 //<ANMNAME> ShiftX ShiftY Rotations FileID NFrames frame1 ... frameN
 //SETACTIVE <ANMNAME> ActiveFrame ActivePtX ActivePtY 

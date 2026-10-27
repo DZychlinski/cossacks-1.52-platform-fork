@@ -446,6 +446,13 @@ __declspec( dllexport ) word dwVersion = 152;
 __declspec( dllexport ) char LobbyVersion[32] = "1.52";
 __declspec( dllexport ) char BuildVersion[32] = "V 1.52";
 
+byte g_InsaneAI = 0;
+
+byte SanitizeInsaneAI(int enabled)
+{
+	return enabled == 1 ? 1 : 0;
+}
+
 int CostThickness;
 int HISPEED = 0;
 int ReliefBrush;

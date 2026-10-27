@@ -3,3 +3,4 @@ Computer players can build up to 4 Storehouses early in the game.
 Computer players build 18th-century barracks without a count limit and treat them as a priority.
 Computer players advance to the 18th century earlier.
 Computer players with large populations build houses in time, so their growth does not stall.
+Optional "Insane AI" lobby setting: computer players rush economy upgrades and mass pikemen and dragoons before attacking (ported from Emile's remix).

@@ -158,6 +158,7 @@ static void OpenLog()
 	ResetTracking();
 	fprintf(g_file, "# Cossacks AI log, started %04d-%02d-%02d %02d:%02d:%02d\n",
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+	fprintf(g_file, "# INSANE %s\n", g_InsaneAI ? "on" : "off");
 	for (int ni = 0; ni < 8; ni++)
 	{
 		if (NationInGame(ni))

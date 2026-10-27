@@ -3287,6 +3287,16 @@ bool MPL_WaitingGame(bool Host, bool SINGLE)
 	speed_mode->AddLine(FASTMOD);
 	speed_mode->CurLine = exFMode;
 
+	//Insane AI: host-only option, applies to every computer player (single player and multiplayer)
+	//Combo in the empty slot right of the speed combo (line 0 = normal, 1 = Insane)
+	ComboBox* insane_ai = MENU.addGP_ComboBox(nullptr,
+		650, 380, BTNS.GPID, 76, 9, 0, &WhiteFont, &YellowFont, nullptr);
+	insane_ai->AddLine("Normal AI");
+	insane_ai->AddLine("Insane AI");
+	insane_ai->CurLine = 0;
+	insane_ai->Enabled = Host;
+
+
 	//Victory condition
 	ComboBox* VICT = MENU.addGP_ComboBox(nullptr, 173, 418, BTNS.GPID, 52, 9, 0, &WhiteFont, &YellowFont, nullptr);
 
@@ -3835,6 +3845,8 @@ ffe2:
 		ADD_OPT_VAL->Enabled = P2E && Host;
 		AOPPIC->Visible = P2E && Host;
 		AOPTB->Visible = P2E && Host;
+		insane_ai->Visible = !P3E;
+		insane_ai->Enabled = !P3E && Host;
 
 		StdKeys();
 
@@ -4061,6 +4073,7 @@ ffe2:
 
 				//Always get speed mode from host
 				PINFO[HostID].speed_mode = speed_mode->CurLine;
+				PINFO[HostID].InsaneAI = SanitizeInsaneAI(!P3E && insane_ai->CurLine);
 
 				if (GPP->CurPage == 0)
 				{//Designed map with already existing filename
@@ -4731,6 +4744,12 @@ ffe2:
 					speed_mode->CurLine = PINFO[HostID].speed_mode;
 					settings_were_changed = true;
 				}
+				const byte host_insane_ai = SanitizeInsaneAI(PINFO[HostID].InsaneAI);
+				if (host_insane_ai != insane_ai->CurLine)
+				{
+					insane_ai->CurLine = host_insane_ai;
+					settings_were_changed = true;
+				}
 
 				//Map type (designed, random, saved game)
 				switch (PINFO[HostID].Page)
@@ -4813,6 +4832,7 @@ ffe2:
 				PINFO[MyID].StartRes = PINFO[HostID].StartRes;
 				PINFO[MyID].ResOnMap = PINFO[HostID].ResOnMap;
 				PINFO[MyID].Game_GUID = PINFO[HostID].Game_GUID;
+				PINFO[MyID].InsaneAI = host_insane_ai;
 				strcpy(CurrentMap, PINFO[HostID].MapName);
 			}
 		}
@@ -7039,6 +7059,7 @@ int processMainMenu()
 			CurrentCampagin = -1;
 			CurrentMission = -1;
 			LOADNATMASK = 0xFFFFFFFF;
+			g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 			PrepareGameMedia(0, 0);
 			InitGame();
 			if (!SCENINF.ScenaryHandler)
@@ -7392,6 +7413,7 @@ void ProcessFranceMission()
 	CreateNationalMaskForMap(CurrentMap);
 	CurrentCampagin = -1;
 	CurrentMission = -1;
+	g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 	PrepareGameMedia(0, 0);
 	InitGame();
 	ItemChoose = mcmSingle;
@@ -7487,6 +7509,7 @@ void processMLoadGame()
 		}
 		else
 		{
+			g_InsaneAI = 0;//saved games do not store the Insane AI option
 			SFLB_LoadGame(fnames[LB->CurItem], 1);
 			HideFlags();
 			ContinueGame = true;
@@ -12112,13 +12135,17 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 
 	PrepareToGame();
 
-	int RD_VERSION = 101;
+	int RD_VERSION = 102;//102: PlayerInfo has InsaneAI appended
 	//RUN DATA
 	RunMethod = 0xFFFFFFFE;
-	RunData[0] = 101;//version of the run data
+	RunData[0] = RD_VERSION;//version of the run data
 	RunData[1] = dwVersion;//version of the game
 	RunData[2] = MyNation;
 	RunDataSize = 3;
+	for (int i = 0; i < 8; i++)
+	{
+		PINFO[i].InsaneAI = g_InsaneAI;//stored in the recording so playback uses the same AI behaviour
+	}
 	memcpy(RunData + RunDataSize, PINFO, sizeof(PINFO));
 	RunDataSize += sizeof(PINFO);
 	memcpy(RunData + RunDataSize, COMPSTART, sizeof(COMPSTART));
@@ -12684,6 +12711,7 @@ bool ProcessSingleMission(int n, int Diff)
 	ShowLoading();
 	strcpy(CurrentMap, MISSLIST.MISS[n].MapName);
 	CreateNationalMaskForMap(CurrentMap);
+	g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 	PrepareGameMedia(0, 0);
 	InitGame();
 	ItemChoose = mcmSingle;
@@ -13400,6 +13428,7 @@ HHH1:
 			strcpy(CurrentMap, AMSP.Pack[LB->CurItem - N0].Map);
 			CreateNationalMaskForMap(CurrentMap);
 			LOADNATMASK = 0xFFFFFFFF;
+			g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 			PrepareGameMedia(0, 0);
 			InitGame();
 			for (int i = 0; i < 8; i++)

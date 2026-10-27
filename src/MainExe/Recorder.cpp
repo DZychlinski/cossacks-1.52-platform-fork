@@ -508,6 +508,23 @@ extern int RM_LandType;
 extern int RM_Resstart;
 extern int RM_Restot;
 
+static int ReadRecordedPlayerInfo( int recordingVersion, int offset )
+{
+	//Recording version 101 and older were written before InsaneAI was appended to PlayerInfo
+	const int packedPlayerInfoSize = recordingVersion >= 102 ? sizeof(PlayerInfo) : sizeof(PlayerInfo) - 1;
+
+	memset( PINFO, 0, sizeof(PINFO) );
+	for (int i = 0; i < 8; i++)
+	{
+		memcpy( PINFO + i, RunData + offset + i * packedPlayerInfoSize, packedPlayerInfoSize );
+	}
+	offset += packedPlayerInfoSize * 8;
+
+	//All 8 entries carry the same value (see PrepareGameMedia)
+	g_InsaneAI = recordingVersion >= 102 ? SanitizeInsaneAI( PINFO[0].InsaneAI ) : 0;
+	return offset;
+}
+
 void RecordGame::ReadStream( char* Name )
 {
 	Inform = 0;
@@ -647,6 +664,7 @@ void RecordGame::ReadStream( char* Name )
 		//RClose(F);
 		ShowLoading();
 		int RM = RunMethod >> 24;
+		g_InsaneAI = 0;//set again below for recordings that store it
 		PlayGameMode = 1;
 		RecordMode = 0;
 		if ( RunMethod == 0xFFFFFFFF )
@@ -656,8 +674,7 @@ void RecordGame::ReadStream( char* Name )
 			int rdVer = RunData[0];
 			SetMyNation( RunData[2] );
 			RunDataSize = 3;
-			memcpy( PINFO, RunData + RunDataSize, sizeof(PINFO) );
-			RunDataSize += sizeof(PINFO);
+			RunDataSize = ReadRecordedPlayerInfo( rdVer, RunDataSize );
 			memcpy( COMPSTART, RunData + RunDataSize, sizeof(COMPSTART) );
 			RunDataSize += sizeof(COMPSTART);
 			memcpy( &RM_LandType, RunData + RunDataSize, 4 );
@@ -679,8 +696,7 @@ void RecordGame::ReadStream( char* Name )
 				int rdVer = RunData[0];
 				SetMyNation( RunData[2] );
 				RunDataSize = 3;
-				memcpy( PINFO, RunData + RunDataSize, sizeof(PINFO) );
-				RunDataSize += sizeof(PINFO);
+				RunDataSize = ReadRecordedPlayerInfo( rdVer, RunDataSize );
 				memcpy( COMPSTART, RunData + RunDataSize, sizeof(COMPSTART) );
 				RunDataSize += sizeof(COMPSTART);
 				memcpy( &RM_LandType, RunData + RunDataSize, 4 );

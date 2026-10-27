@@ -49,4 +49,5 @@ struct PlayerInfo
 	byte UserParam2[3];
 	
 	int speed_mode;
+	byte InsaneAI;//Boolean "Insane AI" option, appended for protocol compatibility
 };

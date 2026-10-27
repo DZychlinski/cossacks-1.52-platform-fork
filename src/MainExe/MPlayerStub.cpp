@@ -1703,6 +1703,10 @@ void HandleMultiplayer()
 	RealTime++;
 }
 
+//Start game packet layout (DWORD indexes): ... [42+8+8] MaxPingTime, [59] Insane AI flag, [60] checksum
+static const int kInsaneAIIndex = 42 + 8 + 8 + 1;
+static const int kStartChecksumIndex = kInsaneAIIndex + 1;
+
 void AnalyseMessages()
 {
 	COUN = 0;
@@ -1716,11 +1720,11 @@ void AnalyseMessages()
 		if (MyDPID != ServerDPID)
 		{
 			DWORD* lp = (DWORD*)MyData;
-			if (lp && lp[0] == 0x037242F3 && !GameInProgress)
+			if (lp && lp[0] == 0x037242F3 && !GameInProgress && MyDSize >= (kStartChecksumIndex + 1) * sizeof(DWORD))
 			{
 				DWORD SUM = 0;
-				for (int i = 0; i < (42 + 8 + 8 + 1); i++) SUM += lp[i];
-				if (SUM == lp[42 + 8 + 8 + 1])
+				for (int i = 0; i < kStartChecksumIndex; i++) SUM += lp[i];
+				if (SUM == lp[kStartChecksumIndex])
 				{
 					ServerDPID = lp[8 + 8];
 					NPlayers = word(lp[9 + 8]);
@@ -1733,6 +1737,7 @@ void AnalyseMessages()
 					strcpy(CurrentMap, (char*)&lp[2]);
 					memcpy(StartTime, &lp[10 + 8 + 32], 4 * 8);
 					MaxPingTime = lp[10 + 8 + 32 + 8];
+					g_InsaneAI = SanitizeInsaneAI(lp[kInsaneAIIndex]);
 					PitchTicks = MaxPingTime ? 8 : 0;
 
 					PlayerInfo PINFO2[8];
@@ -1924,6 +1929,7 @@ bool StartIGame(bool SINGLE)
 		if (PINFO[i].Host) HostID = i;
 	}
 	memcpy(COMPSTART, PINFO[HostID].COMPINFO, 16);
+	g_InsaneAI = SanitizeInsaneAI(PINFO[HostID].InsaneAI);
 
 	FreePDatas();
 
@@ -1951,11 +1957,12 @@ bool StartIGame(bool SINGLE)
 		}
 		memcpy(&BUF[10 + 8 + 32], StartTime, 8 * 4);
 		BUF[10 + 8 + 32 + 8] = MaxPingTime;
+		BUF[kInsaneAIIndex] = g_InsaneAI;
 		DWORD SUM = 0;
-		for (int i = 0; i < 42 + 8 + 8 + 1; i++) SUM += BUF[i];
-		BUF[42 + 8 + 8 + 1] = SUM;
+		for (int i = 0; i < kStartChecksumIndex; i++) SUM += BUF[i];
+		BUF[kStartChecksumIndex] = SUM;
 
-		if (!SendToAllPlayers((43 + 8 + 8 + 1) * 4, BUF, true))
+		if (!SendToAllPlayers((kStartChecksumIndex + 1) * 4, BUF, true))
 			return false;
 
 		// Wait 400ms for delivery
