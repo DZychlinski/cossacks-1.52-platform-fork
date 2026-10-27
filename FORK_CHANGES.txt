@@ -6,5 +6,6 @@ The resource bar shows how many of your peasants work on each resource, and how 
 New "Normal AI / Insane AI" choice next to the game speed in the single player and multiplayer game setup (host only), see AI_CHANGES.txt.
 Mods: put changed data files in mods\<name>\ next to the exe and list the mod under [Mods] Active= in cossacks_native.ini; all players need the same mods.
 The game runs fullscreen from the start (borderless, menu included), so the screen no longer switches resolution when a game starts or ends.
+A building that is researching still counts as present for requirements, e.g. the 18th century no longer waits for a busy Blacksmith or Academy.
 Each new chat message shows the last 10 chat messages again.
 Upgrades being researched in your buildings are listed at the top right with percent done.

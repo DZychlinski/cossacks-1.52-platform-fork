@@ -4,3 +4,9 @@ Computer players build 18th-century barracks without a count limit and treat the
 Computer players advance to the 18th century earlier.
 Computer players with large populations build houses in time, so their growth does not stall.
 Optional "Insane AI" lobby setting: computer players rush economy upgrades and mass pikemen and dragoons before attacking (ported from Emile's remix).
+Computer players build one more Storehouse every 5 minutes after the first 4.
+Computer players build one church per Town Centre, up to 5.
+Computer players upgrade their mines in order: all near gold mines to level 2, one iron and one coal mine to level 2, one gold mine to the top, then the rest to level 2; they save resources for it.
+Insane AI no longer waits for dragoons it cannot train yet before attacking.
+Computer players also take the mines at unused starting positions.
+Computer players build one Mill per Town Centre.

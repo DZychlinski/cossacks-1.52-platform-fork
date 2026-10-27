@@ -1632,6 +1632,26 @@ word City::FindNeedProject()
 	return ApplyInsaneStrategy(this, npro);
 }
 
+void PerformUpgradeLink(OneObject* OBJ);
+
+//Fork: a finished building that is busy researching is not Ready, but it still counts for requirements
+//(long fork upgrades in the Blacksmith/Academy otherwise locked e.g. the 18th century for the whole research)
+static bool HasTypeResearching(Nation* Nat, word type)
+{
+	int N = NtNUnits[Nat->NNUM];
+	word* units = NatList[Nat->NNUM];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->NIndex == type && OB->LocalOrder && OB->LocalOrder->DoLink == &PerformUpgradeLink)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 //Determine possible updates and abilities
 void City::RefreshAbility()
 {
@@ -1663,7 +1683,7 @@ void City::RefreshAbility()
 			if (uc < 8192)
 			{
 				//Monster
-				if (!ReadyAmount[uc])enab = false;
+				if (!ReadyAmount[uc] && !(UnitAmount[uc] && HasTypeResearching(Nat, uc)))enab = false;
 			}
 			else
 			{
@@ -2482,6 +2502,219 @@ static word RemapBuildingToNation(Nation* Nat, word idx)
 	return idx;
 }
 
+//Fork: AI mine upgrade plan, replacing City::UpgradeMines (whose percent-of-stock rule never fired for the
+//expensive levels). Phases, each finished before the next:
+//  1. every near gold mine to level 2 (cheap, quick gold)
+//  2. the nearest iron mine and the nearest coal mine to level 2
+//  3. one near gold mine all the way to the top level
+//  4. every other mine, far ones included, to level 2, nearest first
+//"Near" = within the nation's MINE_UPGRADE1_RADIUS of the Town Centre (as in UpgradeMines). While the chosen
+//upgrade is not affordable, its cost is held back from other AI spending (MineReserveBlocks).
+static const int kMineBasicLevel = 1;//upgrades done at "level 2" in the game
+static const int kMinePlanMaxMines = 64;
+
+struct MinePlanMine
+{
+	OneObject* OB;
+	int Lev;     //upgrades done (0 = new mine)
+	int Res;     //resource the mine produces
+	int Dist;    //distance to the Town Centre
+	bool Near;
+	bool Busy;   //upgrading now
+	bool CanUp;  //the next upgrade exists and is enabled
+};
+
+struct MinePlanResult
+{
+	const word* Reserve;  //cost to hold back, nullptr = nothing to save for
+	bool FullGoldPhase;   //phase 3: the expensive one
+};
+
+enum MinePlanStep { MPS_DONE, MPS_WAIT, MPS_TARGET };
+
+//Nearest mine among those to raise to kMineBasicLevel; MPS_WAIT while only busy ones are left
+static MinePlanStep MinePlanToBasic(MinePlanMine* M, int NM, bool (*Filter)(const MinePlanMine&), int* target)
+{
+	bool busy = false;
+	int best = -1;
+	for (int i = 0; i < NM; i++)
+	{
+		if (M[i].Lev >= kMineBasicLevel || !Filter(M[i]))continue;
+		if (M[i].Busy)
+		{
+			busy = true;
+			continue;
+		}
+		if (!M[i].CanUp)continue;
+		if (best == -1 || M[i].Dist < M[best].Dist)best = i;
+	}
+	if (best != -1)
+	{
+		*target = best;
+		return MPS_TARGET;
+	}
+	return busy ? MPS_WAIT : MPS_DONE;
+}
+
+static bool MineNearGold(const MinePlanMine& m) { return m.Near && m.Res == GoldID; }
+static bool MineAny(const MinePlanMine&) { return true; }
+
+//Phase 2 for one resource: done once any mine of it reached (or is upgrading to) level 2
+static MinePlanStep MinePlanOneBasic(MinePlanMine* M, int NM, int res, int* target)
+{
+	int best = -1;
+	for (int i = 0; i < NM; i++)
+	{
+		if (M[i].Res != res)continue;
+		if (M[i].Lev >= kMineBasicLevel || M[i].Busy)return MPS_DONE;
+		if (M[i].Near && M[i].CanUp && (best == -1 || M[i].Dist < M[best].Dist))best = i;
+	}
+	if (best == -1)return MPS_DONE;
+	*target = best;
+	return MPS_TARGET;
+}
+
+static MinePlanResult ForkMinePlan(City* CT)
+{
+	MinePlanResult R = { nullptr, false };
+	Nation* Nat = CT->Nat;
+	U_Grp* MUP = &Nat->UGRP_MINEUP;
+	if (!MUP->N || !MUP->UIDS)return R;
+	if (!Nat->MU1G_PERCENT[0])return R;//the nation script has mine upgrades switched off (StopMineUpgrades)
+
+	MinePlanMine M[kMinePlanMaxMines];
+	int NM = 0;
+	int cx = CT->CenterX << 11;
+	int cy = CT->CenterY << 11;
+	int nearDist = Nat->MINE_UPGRADE1_RADIUS << 9;
+	for (MineBase* MBS = (MineBase*)CT->SearchInform(0x4519, NULL); MBS && NM < kMinePlanMaxMines;
+		MBS = (MineBase*)CT->SearchInform(0x4519, MBS))
+	{
+		OneObject* OB = Group[MBS->M_ID];
+		if (!OB || OB->Serial != MBS->M_SN || OB->NNUM != Nat->NNUM)continue;
+		bool busy = OB->LocalOrder && OB->LocalOrder->DoLink == &PerformUpgradeLink;
+		if (!OB->Ready && !busy)continue;//still under construction
+		MinePlanMine& m = M[NM++];
+		m.OB = OB;
+		m.Lev = OB->SingleUpgLevel - 2;
+		m.Res = MBS->ResKind;
+		m.Dist = Norma(OB->RealX - cx, OB->RealY - cy);
+		m.Near = m.Dist < nearDist;
+		m.Busy = busy;
+		m.CanUp = m.Lev >= 0 && m.Lev < MUP->N && MUP->UIDS[m.Lev] != 0xFFFF && Nat->UPGRADE[MUP->UIDS[m.Lev]]->Enabled;
+	}
+
+	int target = -1;
+	MinePlanStep step = MinePlanToBasic(M, NM, &MineNearGold, &target);
+	if (step == MPS_DONE)step = MinePlanOneBasic(M, NM, IronID, &target);
+	if (step == MPS_DONE)step = MinePlanOneBasic(M, NM, CoalID, &target);
+	if (step == MPS_DONE)
+	{//one near gold mine to the top: the most upgraded one (ties: nearest)
+		int best = -1;
+		for (int i = 0; i < NM; i++)
+		{
+			if (!MineNearGold(M[i]))continue;
+			if (best == -1 || M[i].Lev > M[best].Lev || (M[i].Lev == M[best].Lev && M[i].Dist < M[best].Dist))best = i;
+		}
+		if (best != -1 && M[best].Lev < MUP->N)
+		{
+			if (M[best].Busy)step = MPS_WAIT;
+			else if (M[best].CanUp)
+			{
+				step = MPS_TARGET;
+				target = best;
+				R.FullGoldPhase = true;
+			}
+		}
+	}
+	if (step == MPS_DONE)step = MinePlanToBasic(M, NM, &MineAny, &target);
+	if (step != MPS_TARGET)return R;
+
+	OneObject* OB = M[target].OB;
+	word upg = MUP->UIDS[M[target].Lev];
+	NewUpgrade* NU = Nat->UPGRADE[upg];
+	for (int i = 0; i < 8; i++)
+	{
+		if (XRESRC(Nat->NNUM, i) < NU->Cost[i])
+		{
+			R.Reserve = NU->Cost;
+			return R;
+		}
+	}
+	OB->PerformUpgrade(upg, OB->Index);
+	R.FullGoldPhase = false;
+	return R;
+}
+
+//Upgrade that starts the 18th century: NewUpgrade::Name is "MAIN" + two-letter nation code (as in AILog.cpp)
+static const char* const kCenturyUpgradePrefix = "MAIN";
+static const size_t kCenturyUpgradeNameLen = 6;
+
+static bool IsCenturyUpgrade(const NewUpgrade* NU)
+{
+	return NU->Name && strlen(NU->Name) == kCenturyUpgradeNameLen &&
+		!strncmp(NU->Name, kCenturyUpgradePrefix, strlen(kCenturyUpgradePrefix));
+}
+
+//A building that the 18th century unlocks (the 18c barracks) while the AI has none of it yet
+static bool IsFirstCenturyBuilding(City* CT, word type)
+{
+	Nation* Nat = CT->Nat;
+	if (CT->UnitAmount[type] || !Nat->Mon[type]->newMons->Building)return false;
+	for (int u = 0; u < Nat->NUpgrades; u++)
+	{
+		NewUpgrade* NU = Nat->UPGRADE[u];
+		if (NU->CtgUpgrade != 11 || !IsCenturyUpgrade(NU))continue;//11 = ENABLE
+		if (NU->UnitGroup)
+		{
+			for (int i = 0; i < NU->NUnits; i++)if (NU->UnitGroup[i] == type)return true;
+		}
+		else if (NU->UnitValue == type)return true;
+	}
+	return false;
+}
+
+//Spending that the mine reserve never holds back, by the produced unit's Usage
+struct MineReserveExemptUsage
+{
+	byte Usage;
+	const char* Reason;
+};
+static const MineReserveExemptUsage kMineReserveExemptUsages[] =
+{
+	{ FarmID, "houses: without population capacity the AI stops growing" },
+	{ PeasantID, "peasants: they are the workers who fill the mines and earn the reserve" },
+};
+
+static bool MineReserveBlocks(City* CT, const ProposedProject* PRP, const MinePlanResult& plan)
+{
+	Nation* Nat = CT->Nat;
+	int cost[8];
+	if (PRP->PKind == 1)
+	{
+		NewUpgrade* NU = Nat->UPGRADE[PRP->NIndex];
+		if (IsCenturyUpgrade(NU))return false;//the 18th century unlocks the AI's late army; never delay it
+		for (int i = 0; i < 8; i++)cost[i] = NU->Cost[i];
+	}
+	else
+	{
+		if (PRP->NIndex >= Nat->NMon)return false;
+		byte usage = Nat->Mon[PRP->NIndex]->newMons->Usage;
+		for (const MineReserveExemptUsage& exempt : kMineReserveExemptUsages)
+		{
+			if (exempt.Usage == usage)return false;
+		}
+		//saving for the top gold mine takes long: the first 18c barracks may still be built meanwhile
+		if (plan.FullGoldPhase && IsFirstCenturyBuilding(CT, PRP->NIndex))return false;
+		GetUnitCost(Nat->NNUM, PRP->NIndex, cost);
+	}
+	for (int i = 0; i < 8; i++)
+	{
+		if (plan.Reserve[i] && cost[i] && XRESRC(Nat->NNUM, i) - cost[i] < int(plan.Reserve[i]))return true;
+	}
+	return false;
+}
+
 //Process production queues, upgrades, farm growing etc
 void City::ProcessCreation()
 {
@@ -2530,10 +2763,9 @@ void City::ProcessCreation()
 		}
 		HandleIdeas();
 
-		if (AI_MINES_UPGRADE)
-		{
-			UpgradeMines();
-		}
+		//Fork: ForkMinePlan replaces UpgradeMines()
+		MinePlanResult minePlan = { nullptr, false };
+		if (AI_MINES_UPGRADE)minePlan = ForkMinePlan(this);
 
 		SendAgressors();
 		HandleDefending();
@@ -2599,6 +2831,10 @@ void City::ProcessCreation()
 		{
 			proj = BestProj[k];
 			ProposedProject* PRP = &Prop[proj];
+			if (minePlan.Reserve && MineReserveBlocks(this, PRP, minePlan))
+			{
+				continue;
+			}
 			if (PRP->PKind == 1)
 			{
 				//upgrade
@@ -3349,7 +3585,10 @@ BeginMine:
 	StartI = i;
 	if (IDI != -1)
 	{
-		if (MinDist > (NT->MINE_CAPTURE_RADIUS >> 2))
+		//Fork: at least the map width (msx cells of 32 px; MinDist is in 128 px), so the AI also takes the
+		//mines of unused starting positions; the nearest safe mine still comes first
+		int captureDist = max(NT->MINE_CAPTURE_RADIUS >> 2, msx >> 2);
+		if (MinDist > captureDist)
 		{
 			TD->Mines[IDI] = INITBEST;
 			return;
@@ -6440,8 +6679,12 @@ void SmartGamer(City* CT)
 			word stableType = FindInsaneProducerType(CT->Nat, HorseStrelokID, true);
 			int pikes = CountArmyType(&CT->Agressors, 0);
 			int dragoons = CountArmyType(&CT->Agressors, 4);
+			//Dragoons count only once they can be trained (some nations have 18th-century dragoons only;
+			//waiting for them before the 18th century held every attack back)
+			word dragoonType = FindProducedUnitType(CT->Nat, stableType, HorseStrelokID);
+			bool dragoonsTrainable = dragoonType != 0xFFFF && CT->Nat->Mon[dragoonType]->Enabled;
 			combinedInsaneAssault = barracksType != 0xFFFF && pikes >= 180 &&
-				(stableType == 0xFFFF || dragoons >= 48);
+				(!dragoonsTrainable || dragoons >= 48);
 			if (combinedInsaneAssault)AType = 0;
 			else if (barracksType == 0xFFFF)AType = CheckMinArmyCreationAbility(&CT->Agressors);
 		}

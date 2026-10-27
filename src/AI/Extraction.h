@@ -7,6 +7,18 @@
 #define AI_XVIII_COST_PERCENT            98   // unchanged value, but now proposed first (top of Buildings)
 #define AI_OPTIONAL_STOREHOUSES          4    // Storehouses 2..4 next to the optional Town Centres
 #define AI_OPTIONAL_STOREHOUSES_COST_PERCENT 50
+#define AI_STOREHOUSE_PERIOD_SEC         300  // and one more Storehouse every 5 minutes of game time after that (they stopped at 4)
+#define AI_CHURCHES_MAX                  5    // one church per Town Centre, at most this many
+#define AI_EXTRA_CHURCHES_COST_PERCENT   60   // churches after the first (each gives population)
+#define AI_EXTRA_MILLS_COST_PERCENT      60   // one Mill per Town Centre: mills after the first two
+// Fork: one church per Town Centre (at least 1), at most AI_CHURCHES_MAX
+int ChurchTarget(){
+	int n = GetUnits(&CENTER);
+	if(n < 1) n = 1;
+	if(n > AI_CHURCHES_MAX) n = AI_CHURCHES_MAX;
+	return n;
+};
+
 void DoFish(){
 	if(UpgIsRun(&XVIII)){
 		TryUnit(&PORT,1,100,100);
@@ -324,6 +336,7 @@ void Buildings(){
 	if(GetReadyUnits(&CENTER)<2 && GetStartRes()!=SR_1000) return;
 	TryUnit(&CENTER, AI_OPTIONAL_CENTERS, AI_OPTIONAL_CENTERS_COST_PERCENT, 100);
 	TryUnit(&SKLAD, AI_OPTIONAL_STOREHOUSES, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
+	TryUnit(&SKLAD, GetGameSeconds()/AI_STOREHOUSE_PERIOD_SEC, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
 
 	TryUnit(&KAZ17, 1, 100, 100);		
 	TryUnit(&AKADEMIA, 1, 100, 100);
@@ -337,6 +350,8 @@ void Buildings(){
 	TryUnit(&STABLE, 2, 100, 100);
 
 	TryUnit(&CHURCH, 1, 100, 100);
+	TryUnit(&CHURCH, ChurchTarget(), AI_EXTRA_CHURCHES_COST_PERCENT, 100);
+	TryUnit(&MELN, GetUnits(&CENTER), AI_EXTRA_MILLS_COST_PERCENT, 100);
 
 	TryUnit(&ARTDEPO, 1 , 100, 100);
 	if(UpgIsDone(&PUSHKA_UB0)) TryUnit(&ARTDEPO, 3 , 40, 100); //Added UpgIsDone condition to prevent buildings of unneccessary art dept in non-cannon games
@@ -753,6 +768,7 @@ void BuildingsMillions(){
 
 	TryUnit(&DIPCENTER, 1, 100, 100);
 	TryUnit(&CHURCH, 1, 100, 100);
+	TryUnit(&CHURCH, ChurchTarget(), AI_EXTRA_CHURCHES_COST_PERCENT, 100);
 	TryUnit(&ARTDEPO, 1, 100, 100);
 	TryUnit(&STABLE, 1, 100, 100);
 

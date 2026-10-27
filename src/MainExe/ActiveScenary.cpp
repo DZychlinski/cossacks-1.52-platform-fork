@@ -3655,6 +3655,12 @@ extern "C" __declspec( dllexport ) int GetGlobalTime()
 {
 	return REALTIME;
 }
+//Fork: game time in seconds since the game started (the clock of the in-game timer; kept in saved games)
+extern int GameTime;
+extern "C" __declspec( dllexport ) int GetGameSeconds()
+{
+	return GameTime;
+}
 //---------------------------Dynamical zones-----------------------------//
 extern "C" __declspec( dllexport ) bool UnitsCenter( GAMEOBJ* DstZone, GAMEOBJ* Units, word R )
 {

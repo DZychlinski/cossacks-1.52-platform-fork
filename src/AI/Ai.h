@@ -491,6 +491,14 @@ inline int GetGlobalTime(){
 	else return 0;
 };
 
+// Fork: game time in seconds. Bound with plain GetProcAddress (no error box): 0 with an exe that lacks it.
+typedef int tpGetGameSeconds();
+tpGetGameSeconds* lpGetGameSeconds=NULL;
+inline int GetGameSeconds(){
+	if(lpGetGameSeconds)return lpGetGameSeconds();
+	else return 0;
+};
+
 
 typedef byte tpTrigg(byte ID);
 tpTrigg* lpTrigg=NULL;
@@ -1058,6 +1066,7 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 #ifdef AI_DEBUG_CHAT
 					lpAIReportProject=(tpAIReportProject*)GetProcAddress(hLib,"AIReportProject");
 #endif
+					lpGetGameSeconds=(tpGetGameSeconds*)GetProcAddress(hLib,"GetGameSeconds");
 					LOADF(RegisterUnits);
 					LOADF(RegisterString);
 					LOADF(RegisterSound);
