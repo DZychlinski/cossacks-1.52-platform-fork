@@ -116,9 +116,12 @@ void ShowHints()
 	}
 }
 
+void ClearChatHistory();
+
 //Clears all hint strinhs except primary hint
 void ClearHints()
 {
+	ClearChatHistory();
 	for (int i = 0; i < kMaxHintCount; i++)
 	{
 		additional_hints[i][0] = 0;
@@ -199,11 +202,96 @@ extern int GameTime;
 
 //Fork: adds a chat message prefixed with the game time (h:mm:ss), e.g. "[0:12:34] Player: text".
 //The stamped text is also what a recording stores, so replays (Recorder.cpp) show it unchanged.
+//Fork: chat history. Each new chat message shows the last kChatHistorySize messages again (oldest on top),
+//so a conversation stays readable after its older lines timed out.
+static const int kChatHistorySize = 10;
+static char chat_history[kChatHistorySize][256];
+static byte chat_history_opt[kChatHistorySize];
+static int chat_history_count = 0;
+
+static bool IsInChatHistory( const char* s )
+{
+	for (int i = 0; i < chat_history_count; i++)
+	{
+		if (!strcmp( s, chat_history[i] ))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+//Removes the chat lines still on display, so the history is shown once, in order
+static void RemoveShownChatHistory()
+{
+	int to = 0;
+	for (int i = 0; i < kMaxHintCount; i++)
+	{
+		if (additional_hints_times[i] && IsInChatHistory( additional_hints[i] ))
+		{
+			continue;
+		}
+		if (to != i)
+		{
+			strcpy( additional_hints[to], additional_hints[i] );
+			additional_hints_times[to] = additional_hints_times[i];
+			HintOpt[to] = HintOpt[i];
+		}
+		to++;
+	}
+	for (; to < kMaxHintCount; to++)
+	{
+		additional_hints[to][0] = 0;
+		additional_hints_times[to] = 0;
+		HintOpt[to] = 0;
+	}
+}
+
+//Adds a hint line without touching the recorder's last-chat fields (CreateTimedHintEx does)
+static void PushHintLine( const char* s, int time, byte opt )
+{
+	for (int i = kMaxHintCount - 1; i > 0; i--)
+	{
+		strcpy( additional_hints[i], additional_hints[i - 1] );
+		additional_hints_times[i] = additional_hints_times[i - 1];
+		HintOpt[i] = HintOpt[i - 1];
+	}
+	strcpy( additional_hints[0], s );
+	additional_hints_times[0] = time;
+	HintOpt[0] = opt;
+}
+
 void CreateChatHint( char* s, byte opt )
 {
 	char stamped[256];
 	snprintf( stamped, sizeof( stamped ), "[%d:%02d:%02d] %s", GameTime / 3600, GameTime / 60 % 60, GameTime % 60, s );
+
+	RemoveShownChatHistory();
+	int first = chat_history_count - ( kChatHistorySize - 1 );
+	for (int i = first < 0 ? 0 : first; i < chat_history_count; i++)
+	{
+		PushHintLine( chat_history[i], kChatMessageDisplayTime, chat_history_opt[i] );
+	}
 	CreateTimedHintEx( stamped, kChatMessageDisplayTime, opt );
+
+	if (chat_history_count == kChatHistorySize)
+	{
+		for (int i = 1; i < kChatHistorySize; i++)
+		{
+			strcpy( chat_history[i - 1], chat_history[i] );
+			chat_history_opt[i - 1] = chat_history_opt[i];
+		}
+		chat_history_count--;
+	}
+	strcpy( chat_history[chat_history_count], stamped );
+	chat_history_opt[chat_history_count] = opt;
+	chat_history_count++;
+}
+
+//Forgets the chat history (new game)
+void ClearChatHistory()
+{
+	chat_history_count = 0;
 }
 
 //Shows all hints and adjusts timestamps
