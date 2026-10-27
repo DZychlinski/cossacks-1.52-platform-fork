@@ -300,6 +300,10 @@ previous snapshot, key buildings (`BLD`) and all finished buildings by name (`BL
 
 ## Changes from upstream
 
+The player-facing changes are also listed one per line in [`FORK_CHANGES.txt`](FORK_CHANGES.txt), with
+the AI behaviour changes in [`AI_CHANGES.txt`](AI_CHANGES.txt), meant to be shown to players in the game
+later. Add a line there for every change players can notice.
+
 | Change | Why |
 |---|---|
 | Added `.gitignore`; stopped tracking `.vs/`, `build/obj`, `build/x86obj`, `web/dmcr.*`, `node_modules`, `__pycache__`, `x86/dll/M_*`, `x86/dll/England`, `x86/dll/*/*.bin`, `*.pdb` | Keep only sources; all of these are build output, caches, or generated files no build uses. The AI objects in `build/x86obj` are compiled from `x86/dll/AI_*/recomp_src` by `x86/build_multitest.sh`; the `.bin` section dumps are re-extracted from `ai/*.dll` by `x86/cos_prep_dll.py`. |

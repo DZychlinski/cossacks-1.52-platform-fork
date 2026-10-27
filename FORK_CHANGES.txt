@@ -1,0 +1,5 @@
+Settings, saves and autosaves are kept in the game's own folder.
+AI: computer players have lifted or no limits on the buildings they build (details in AI_CHANGES.txt).
+Chat messages stay on screen twice as long (20 seconds) and show the game time, e.g. [0:12:34].
+The minimap "under attack" marker flashes four times as long.
+The resource bar shows how many of your peasants work on each resource, and how many are idle.
