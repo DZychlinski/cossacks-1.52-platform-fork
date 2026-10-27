@@ -31,16 +31,16 @@ static const GatherDef kGatherDefs[] = {
 };
 static const int kNGather = sizeof(kGatherDefs) / sizeof(kGatherDefs[0]);
 
-// Mine kind = Nat->Mon index offset from Nat->UID_MINE (see Megapolis.cpp UpgradeMines: NMinGL, NMinFE, NMinCO).
+// Mine kind = the resource the mine produces (OB->RType), as the "I" statistics screen counts it (Mine.cpp NInGold/NInIron/NInCoal).
 struct MineKindDef
 {
-	int Offset;
+	int* ResID;     // pointer: the engine resource ids are globals filled at load time
 	int PeasantJobCounts::* Field;
 };
 static const MineKindDef kMineKindDefs[] = {
-	{ 0, &PeasantJobCounts::Gold },   // UID_MINE + 0
-	{ 1, &PeasantJobCounts::Iron },   // UID_MINE + 1
-	{ 2, &PeasantJobCounts::Coal },   // UID_MINE + 2
+	{ &GoldID, &PeasantJobCounts::Gold },
+	{ &IronID, &PeasantJobCounts::Iron },
+	{ &CoalID, &PeasantJobCounts::Coal },
 };
 static const int kMineKinds = sizeof(kMineKindDefs) / sizeof(kMineKindDefs[0]);
 
@@ -75,11 +75,10 @@ void CountPeasantJobs(int nation, PeasantJobCounts* out)
 		if (NM->Building)
 		{
 			if (NM->Usage != MineID || !OB->Ready) continue;
-			int kind = int(OB->NIndex) - int(OB->Nat->UID_MINE);
 			bool known = false;
 			for (int k = 0; k < kMineKinds; k++)
 			{
-				if (kind == kMineKindDefs[k].Offset)
+				if (OB->RType == *kMineKindDefs[k].ResID)
 				{
 					out->*kMineKindDefs[k].Field += OB->NInside;
 					known = true;

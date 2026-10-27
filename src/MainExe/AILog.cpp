@@ -29,16 +29,16 @@ static const int kNNations = 8;
 static const int kMineRulesSize = 27;     // SetMinesUpgradeRules table: 3 levels x gold/iron/coal x 3 values
 static const byte kNoReportedOutcome = 0xFF;
 
-// Mine kind = Nat->Mon index offset from Nat->UID_MINE (see Megapolis.cpp UpgradeMines: NMinGL, NMinFE, NMinCO).
+// Mine kind = the resource the mine produces (OB->RType), as the "I" statistics screen counts it.
 struct MineKindDef
 {
-	int Offset;
+	int* ResID;     // pointer: the engine resource ids are globals filled at load time
 	const char* Label;
 };
 static const MineKindDef kMineKindDefs[] = {
-	{ 0, "gold" },  // UID_MINE + 0
-	{ 1, "iron" },  // UID_MINE + 1
-	{ 2, "coal" },  // UID_MINE + 2
+	{ &GoldID, "gold" },
+	{ &IronID, "iron" },
+	{ &CoalID, "coal" },
 };
 static const int kMineKinds = sizeof(kMineKindDefs) / sizeof(kMineKindDefs[0]);
 
@@ -312,11 +312,10 @@ static void Snapshot()
 			byte use = NM->Usage;
 			if (use == MineID)
 			{
-				int kind = int(OB->NIndex) - int(OB->Nat->UID_MINE);
 				bool known = false;
 				for (int k = 0; k < kMineKinds; k++)
 				{
-					if (kind == kMineKindDefs[k].Offset)
+					if (OB->RType == *kMineKindDefs[k].ResID)
 					{
 						AddMine(N.Mines[k], OB);
 						known = true;
