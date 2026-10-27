@@ -134,19 +134,31 @@ static void load_manifest()
 #else
     FILE* f = fopen("/manifest.txt", "rb");
 #endif
-    if (!f) return;
-    fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return; }
-    g_manbuf = (char*)malloc(sz + 1);
-    size_t rd = fread(g_manbuf, 1, sz, f); g_manbuf[rd] = 0; fclose(f);
-    (void)rd;
     int cap = 8192; g_nnames = 0;
     char** arr = (char**)malloc(sizeof(char*) * cap);
-    for (char* line = strtok(g_manbuf, "\r\n"); line; line = strtok(NULL, "\r\n")) {
-        if (!*line) continue;
-        if (g_nnames >= cap) { cap *= 2; arr = (char**)realloc(arr, sizeof(char*) * cap); }
-        arr[g_nnames++] = line;
+    if (f) {
+        fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
+        if (sz < 0) sz = 0;
+        g_manbuf = (char*)malloc(sz + 1);
+        size_t rd = fread(g_manbuf, 1, sz, f); g_manbuf[rd] = 0; fclose(f);
+        for (char* line = strtok(g_manbuf, "\r\n"); line; line = strtok(NULL, "\r\n")) {
+            if (!*line) continue;
+            if (g_nnames >= cap) { cap *= 2; arr = (char**)realloc(arr, sizeof(char*) * cap); }
+            arr[g_nnames++] = line;
+        }
     }
+#ifdef _MSC_VER
+    // files that only exist in an active mod (new maps etc.) must be listed too
+    int nman = g_nnames;
+    for (int m = 0; m < cos_mod_file_count(); m++) {
+        const char* name = cos_mod_file(m);
+        bool known = false;
+        for (int i = 0; i < nman && !known; i++) known = !strcmp(arr[i], name);
+        if (known) continue;
+        if (g_nnames >= cap) { cap *= 2; arr = (char**)realloc(arr, sizeof(char*) * cap); }
+        arr[g_nnames++] = (char*)name;
+    }
+#endif
     free(g_names); g_names = arr;
 }
 

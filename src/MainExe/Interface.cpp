@@ -56,6 +56,7 @@ extern void _wd_activate(bool on);
 #include "bmptool.h"
 
 #include "PlayerInfo.h"
+#include "NativeData.h"
 #include <SDL.h>
 #include <SDL_syswm.h>
 
@@ -1042,6 +1043,29 @@ extern char** NatsIDS;
 bool EnterName();
 
 extern char ACCESS[16];
+
+//True when a player's active mods (cossacks_native.ini [Mods]) differ from the host's;
+//with only_me, only the local player is checked. Different data files desync the game.
+static bool PlayerModsDiffer(bool only_me)
+{
+	unsigned int host_mods = cos_mods_hash();
+	for (int i = 0; i < NPlayers; i++)
+	{
+		if (PINFO[i].Host)
+		{
+			host_mods = PINFO[i].ModsHash;
+		}
+	}
+	for (int i = 0; i < NPlayers; i++)
+	{
+		if (PINFO[i].ModsHash != host_mods && (!only_me || PINFO[i].PlayerID == MyDPID))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+static char* MODS_DIFFER = "Players have different active mods ([Mods] in cossacks_native.ini)";
 
 //Prepares multiplayer Deathmatch lobby
 //Also handles lobbies for Historical Battles over GSC network
@@ -3401,6 +3425,7 @@ ffe2:
 	for (int i = 0; i < 8; i++)
 	{
 		PINFO[i].Version = dwVersion;
+		PINFO[i].ModsHash = cos_mods_hash();
 	}
 
 	if (SINGLE)
@@ -3467,6 +3492,7 @@ ffe2:
 			PINFO[i].Host = Host;
 			PINFO[i].CD = 1;
 			PINFO[i].Version = dwVersion;
+			PINFO[i].ModsHash = cos_mods_hash();
 			PINFO[i].Rank = GetLogRank();
 			PINFO[i].ProfileID = GetMyProfile();
 		}
@@ -3725,6 +3751,7 @@ ffe2:
 				PINFO[i].Host = Host;
 				PINFO[i].CD = 1;
 				PINFO[i].Version = dwVersion;
+				PINFO[i].ModsHash = cos_mods_hash();
 				PINFO[i].Rank = GetLogRank();
 				PINFO[i].ProfileID = GetMyProfile();
 
@@ -3873,6 +3900,10 @@ ffe2:
 		if (MyOldVers)
 		{
 			GPPB->Hint = OLDV;
+		}
+		else if (PlayerModsDiffer(false))
+		{
+			GPPB->Hint = MODS_DIFFER;
 		}
 		else
 		{
@@ -5203,13 +5234,17 @@ ffe2:
 					}
 				}
 			}
+			if (PlayerModsDiffer(false))
+			{
+				GMREADY = 0;
+			}
 			OkBtn->Enabled = GMREADY;
 			OkBtn->Visible = GMREADY;
 		}
 		else
 		{
-			OkBtn->Enabled = !MyOldVers;
-			OkBtn->Visible = !MyOldVers;
+			OkBtn->Enabled = !MyOldVers && !PlayerModsDiffer(true);
+			OkBtn->Visible = !MyOldVers && !PlayerModsDiffer(true);
 
 			/*
 			//BUGFIX: Disable no direct connection check
@@ -5704,6 +5739,7 @@ bool MPL_WaitingBattleGame(bool Host, int BattleID)
 			PINFO[i].Host = Host;
 			PINFO[i].CD = 1;
 			PINFO[i].Version = dwVersion;
+			PINFO[i].ModsHash = cos_mods_hash();
 		}
 		else
 		{
@@ -5754,6 +5790,7 @@ bool MPL_WaitingBattleGame(bool Host, int BattleID)
 				PINFO[i].Host = Host;
 				PINFO[i].CD = 1;
 				PINFO[i].Version = dwVersion;
+				PINFO[i].ModsHash = cos_mods_hash();
 			}
 		}
 
@@ -5830,6 +5867,7 @@ bool MPL_WaitingBattleGame(bool Host, int BattleID)
 		AnalyseMessages();
 		if (GameInProgress)goto FinCLC;
 		if (MyOldVers)GPPB->Hint = OLDV;
+		else if (PlayerModsDiffer(false))GPPB->Hint = MODS_DIFFER;
 		MENU.MarkToDraw();
 		MENU.ProcessDialogs();
 		if (GameInProgress)goto FinCLC;
@@ -6129,13 +6167,17 @@ bool MPL_WaitingBattleGame(bool Host, int BattleID)
 			{
 				GMREADY = 0;
 			}
+			if (PlayerModsDiffer(false))
+			{
+				GMREADY = 0;
+			}
 			OkBtn->Enabled = GMREADY;
 			OkBtn->Visible = GMREADY;
 		}
 		else
 		{
-			OkBtn->Enabled = !MyOldVers;
-			OkBtn->Visible = !MyOldVers;
+			OkBtn->Enabled = !MyOldVers && !PlayerModsDiffer(true);
+			OkBtn->Visible = !MyOldVers && !PlayerModsDiffer(true);
 		}
 		//checking readyness
 		if (ItemChoose == mcmOk && !Host)
@@ -11903,6 +11945,10 @@ bool WaitingGame(bool Host)
 
 		if (Host)
 		{
+			if (PlayerModsDiffer(false))
+			{
+				GMREADY = 0;
+			}
 			OkBtn->Enabled = GMREADY;
 		}
 
@@ -12148,7 +12194,7 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 
 	PrepareToGame();
 
-	int RD_VERSION = 102;//102: PlayerInfo has InsaneAI appended
+	int RD_VERSION = 103;//102: PlayerInfo has InsaneAI appended; 103: and ModsHash
 	//RUN DATA
 	RunMethod = 0xFFFFFFFE;
 	RunData[0] = RD_VERSION;//version of the run data
@@ -12158,6 +12204,7 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 	for (int i = 0; i < 8; i++)
 	{
 		PINFO[i].InsaneAI = g_InsaneAI;//stored in the recording so playback uses the same AI behaviour
+		PINFO[i].ModsHash = cos_mods_hash();//the data the game ran with (playback needs the same mods)
 	}
 	memcpy(RunData + RunDataSize, PINFO, sizeof(PINFO));
 	RunDataSize += sizeof(PINFO);

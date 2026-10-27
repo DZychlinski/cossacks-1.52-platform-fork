@@ -9,12 +9,20 @@
 // The data root comes from cossacks_native.ini ([Data] DataDir), else <exe dir>\data, else a folder
 // picker. It is resolved lazily on first use because files are opened from static initialisers,
 // before WinMain runs.
+//
+// Mods: cossacks_native.ini [Mods] Active=name1,name2 activates the folders <exe dir>\mods\<name>\.
+// A mod folder holds loose data files at the same paths as in data\en (no gsc packing). /game/X is
+// looked up in the active mods first (in the listed order, so name1 wins over name2), then in data.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shobjidl.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 #include "NativeData.h"
 
 #pragma comment(lib, "ole32.lib")
@@ -24,6 +32,10 @@ static char g_ini[MAX_PATH];
 static char g_root[MAX_PATH];
 static char g_lang[32];
 static bool g_ready = false;
+
+static std::vector<std::string> g_mods;      // active mod folders, highest priority first
+static std::vector<std::string> g_modFiles;  // every file in the active mods, canonical (UPPER, '/')
+static unsigned int g_modsHash = 0;          // 0 = no active mod
 
 static bool file_exists(const char* p)
 {
@@ -73,6 +85,70 @@ static bool pick_folder(char* out, int n)
     return ok;
 }
 
+// FNV-1a, continued from h
+static unsigned int fnv1a(unsigned int h, const void* data, size_t n)
+{
+    const unsigned char* p = (const unsigned char*)data;
+    for (size_t i = 0; i < n; i++) { h ^= p[i]; h *= 16777619u; }
+    return h;
+}
+
+// collects the files below dir as paths relative to the mod root (prefix), canonical form
+static void list_mod_files(const std::string& dir, const std::string& prefix, std::vector<std::string>& out)
+{
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA((dir + "\\*").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, "..")) continue;
+        std::string rel = prefix + fd.cFileName;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            list_mod_files(dir + "\\" + fd.cFileName, rel + "/", out);
+        } else {
+            for (char& c : rel) c = (char)toupper((unsigned char)c);
+            out.push_back(rel);
+        }
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+}
+
+// reads [Mods] Active, lists the mod files and hashes their paths and contents
+static void mods_resolve()
+{
+    char active[1024];
+    GetPrivateProfileStringA("Mods", "Active", "", active, sizeof active, g_ini);
+    unsigned int h = 2166136261u;
+    for (char* name = strtok(active, ",;"); name; name = strtok(NULL, ",;")) {
+        while (*name == ' ' || *name == '\t') name++;
+        size_t l = strlen(name);
+        while (l && (name[l - 1] == ' ' || name[l - 1] == '\t')) name[--l] = 0;
+        if (!*name) continue;
+        std::string dir = std::string(g_exeDir) + "\\mods\\" + name;
+        if (!dir_exists(dir.c_str())) {
+            std::string msg = "Mod folder not found, the mod is skipped:\n" + dir;
+            MessageBoxA(NULL, msg.c_str(), "Cossacks", MB_OK | MB_ICONWARNING);
+            continue;
+        }
+        g_mods.push_back(dir);
+        std::vector<std::string> files;
+        list_mod_files(dir, "", files);
+        std::sort(files.begin(), files.end());
+        h = fnv1a(h, name, strlen(name) + 1);
+        for (const std::string& f : files) {
+            h = fnv1a(h, f.c_str(), f.size() + 1);
+            FILE* fp = fopen((dir + "\\" + f).c_str(), "rb");
+            if (fp) {
+                unsigned char buf[65536];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof buf, fp)) > 0) h = fnv1a(h, buf, n);
+                fclose(fp);
+            }
+            g_modFiles.push_back(f);
+        }
+    }
+    if (!g_mods.empty()) g_modsHash = h ? h : 1;
+}
+
 static void data_resolve()
 {
     if (g_ready) return;
@@ -106,11 +182,17 @@ static void data_resolve()
     char p[MAX_PATH * 2];
     snprintf(p, sizeof p, "%s\\%s", g_root, g_lang);
     if (!g_lang[0] || !dir_exists(p)) strcpy(g_lang, "en");
+
+    mods_resolve();
 }
 
-// real path of a game-data file: selected language first, then en
+// real path of a game-data file: active mods first, then the selected language, then en
 static bool game_path(const char* rel, char* out, int n)
 {
+    for (const std::string& mod : g_mods) {
+        snprintf(out, n, "%s\\%s", mod.c_str(), rel);
+        if (file_exists(out)) return true;
+    }
     snprintf(out, n, "%s\\%s\\%s", g_root, g_lang, rel);
     if (file_exists(out)) return true;
     snprintf(out, n, "%s\\en\\%s", g_root, rel);
@@ -132,6 +214,23 @@ extern "C" int cos_ini_int(const char* section, const char* key, int def)
 {
     data_resolve();
     return (int)GetPrivateProfileIntA(section, key, def, g_ini);
+}
+
+extern "C" unsigned int cos_mods_hash(void)
+{
+    data_resolve();
+    return g_modsHash;
+}
+
+extern "C" int cos_mod_file_count(void)
+{
+    data_resolve();
+    return (int)g_modFiles.size();
+}
+
+extern "C" const char* cos_mod_file(int i)
+{
+    return (i >= 0 && i < (int)g_modFiles.size()) ? g_modFiles[i].c_str() : NULL;
 }
 
 extern "C" const char* cos_native_path(const char* vpath, char* out, int n)
