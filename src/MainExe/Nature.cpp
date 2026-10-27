@@ -592,6 +592,93 @@ static int BarPeasantCount( const PeasantJobCounts& jobs, int resId )
 }
 extern int RealLx;
 
+// Fork: research in progress in any of the local player's buildings, top right below the resource bar:
+// one line per building, "<upgrade> 45%", the most advanced first. Display only.
+void PerformUpgradeLink( OneObject* OBJ );
+static const int kResearchListTop = 26;          // below the resource bar
+static const int kResearchListRightGap = 8;      // to the screen edge
+static const int kResearchListLineHeight = 22;
+static const int kResearchListMaxLines = 12;     // the rest is summed up as "+n more"
+static const int kResearchListMaxWidthPx = 640;  // longer upgrade names are cut
+static const int kResearchListMaxCollected = 128;
+
+struct ResearchLine
+{
+	const char* Name;
+	int Percent;
+};
+
+static void ShowResearchList()
+{
+	byte NI = NatRefTBL[MyNation];
+	ResearchLine lines[kResearchListMaxCollected];
+	int n = 0;
+	int extra = 0;
+	int N = NtNUnits[NI];
+	word* units = NatList[NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (!OB || OB->Sdoxlo)continue;
+		Order1* OR1 = OB->LocalOrder;
+		if (!OR1 || OR1->DoLink != &PerformUpgradeLink)continue;
+		if (n == kResearchListMaxCollected)
+		{
+			extra++;
+			continue;
+		}
+		NewUpgrade* NU = NATIONS[NI].UPGRADE[OR1->info.PUpgrade.NewUpgrade];
+		int stages = OR1->info.PUpgrade.NStages;
+		int pct = stages ? int( OR1->info.PUpgrade.Stage ) * 100 / stages : 0;
+		lines[n].Name = NU->Message ? NU->Message : NU->Name;
+		lines[n].Percent = pct > 99 ? 99 : pct;
+		n++;
+	}
+	for (int i = 1; i < n; i++)
+	{// insertion sort, most advanced first
+		ResearchLine l = lines[i];
+		int j = i - 1;
+		for (; j >= 0 && lines[j].Percent < l.Percent; j--)lines[j + 1] = lines[j];
+		lines[j + 1] = l;
+	}
+	if (n > kResearchListMaxLines)
+	{
+		extra += n - kResearchListMaxLines;
+		n = kResearchListMaxLines;
+	}
+
+	int right = RealLx - kResearchListRightGap;
+	int y = kResearchListTop;
+	char s[300];
+	for (int i = 0; i < n; i++)
+	{
+		char pct[16];
+		sprintf( pct, "  %d%%", lines[i].Percent );
+		int len = (int) strlen( lines[i].Name );
+		for (;;)
+		{
+			if (len < (int) strlen( lines[i].Name ))
+				snprintf( s, sizeof( s ), "%.*s...%s", len, lines[i].Name, pct );
+			else
+				snprintf( s, sizeof( s ), "%s%s", lines[i].Name, pct );
+			if (len <= 8 || GetRLCStrWidth( s, &WhiteFont ) <= kResearchListMaxWidthPx)break;
+			len--;
+		}
+		int x = right - GetRLCStrWidth( s, &WhiteFont );
+		ShowString( x + 2, y + 2, s, &BlackFont );
+		ShowString( x, y, s, &WhiteFont );
+		y += kResearchListLineHeight;
+	}
+	if (extra)
+	{
+		sprintf( s, "+%d more", extra );
+		int x = right - GetRLCStrWidth( s, &WhiteFont );
+		ShowString( x + 2, y + 2, s, &BlackFont );
+		ShowString( x, y, s, &WhiteFont );
+	}
+}
+
 bool AddUnitsToCash( byte NI, word ID );
 void ClearUniCash();
 void GetCorrectMoney( byte NI, int* MONEY );
@@ -633,6 +720,7 @@ void ShowRMap()
 	};
 	sprintf( gg, "Idle %d", JOBS.Idle );
 	ShowString( x0 + kBarWidthPx + kBarGapPx * 2, 3 + 1, gg, &SmallYellowFont );
+	ShowResearchList();
 	return;
 };
 
