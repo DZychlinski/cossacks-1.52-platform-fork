@@ -70,6 +70,7 @@ set(MAIN_SOURCES
     NewUpgrade.cpp
     Nuclear.cpp
     OnWater.cpp
+    PeasantJobs.cpp
     path.cpp
     RealWater.cpp
     Recorder.cpp

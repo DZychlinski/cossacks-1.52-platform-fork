@@ -22,6 +22,7 @@
 #include "GP_Draw.h"
 #include "DrawForm.h"
 #include "Fonts.h"
+#include "PeasantJobs.h"
 //void FindEmptyPoint(byte* x,byte* y);
 byte rtmap[256][256];//resource type map
 byte ramap[256][256];//resource amount map
@@ -558,6 +559,37 @@ int GetResID( char* Name )
 	return -1;
 };
 int xit[6] = { 126,531,382,257,663,793 };
+// Fork: peasants working on each resource, shown as "(n)" on the slot's black field: the count is
+// right-aligned at the slot end (xit) and the amount is moved left of it. Bar slots are indexed by
+// resource id like xit; the ids are assigned at load (Ddex1.cpp GetResID), so they are matched here.
+struct BarPeasantJob
+{
+	int* ResID;
+	int PeasantJobCounts::* Job;
+};
+static const BarPeasantJob kBarPeasantJobs[] = {
+	{ &FoodID,  &PeasantJobCounts::Food },
+	{ &TreeID,  &PeasantJobCounts::Wood },
+	{ &StoneID, &PeasantJobCounts::Stone },
+	{ &GoldID,  &PeasantJobCounts::Gold },   // miners inside gold mines
+	{ &IronID,  &PeasantJobCounts::Iron },   // miners inside iron mines
+	{ &CoalID,  &PeasantJobCounts::Coal },   // miners inside coal mines
+};
+static const int kBarGapPx = 3;        // between the amount and its "(n)"
+static const int kBarWidthPx = 800;    // resource bar graphic; "Idle n" is drawn right of it
+
+// Peasants on the resource with this id, or -1 if it has no peasant job
+static int BarPeasantCount( const PeasantJobCounts& jobs, int resId )
+{
+	for (int k = 0; k < (int)( sizeof( kBarPeasantJobs ) / sizeof( kBarPeasantJobs[0] ) ); k++)
+	{
+		if (*kBarPeasantJobs[k].ResID == resId)
+		{
+			return jobs.*kBarPeasantJobs[k].Job;
+		}
+	}
+	return -1;
+}
 extern int RealLx;
 
 bool AddUnitsToCash( byte NI, word ID );
@@ -583,11 +615,24 @@ void ShowRMap()
 	int MON[8];
 
 	GetCorrectMoney( NatRefTBL[MyNation], MON );
+	const PeasantJobCounts& JOBS = GetLocalPeasantJobsCached();
 	for (int i = 0; i < 6; i++)
 	{
+		int right = x0 + xit[i];
+		int np = BarPeasantCount( JOBS, i );
+		if (np >= 0)
+		{
+			char cnt[16];
+			sprintf( cnt, "(%d)", np );
+			right -= GetRLCStrWidth( cnt, &SmallYellowFont );
+			ShowString( right, 3 + 1, cnt, &SmallYellowFont );
+			right -= kBarGapPx;
+		}
 		sprintf( gg, "%d", MON[i] );
-		ShowString( x0 + xit[i] - GetRLCStrWidth( gg, &SmallWhiteFont ), 3 + 1, gg, &SmallWhiteFont );
+		ShowString( right - GetRLCStrWidth( gg, &SmallWhiteFont ), 3 + 1, gg, &SmallWhiteFont );
 	};
+	sprintf( gg, "Idle %d", JOBS.Idle );
+	ShowString( x0 + kBarWidthPx + kBarGapPx * 2, 3 + 1, gg, &SmallYellowFont );
 	return;
 };
 

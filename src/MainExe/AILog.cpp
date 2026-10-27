@@ -10,6 +10,7 @@
 #include "MapDiscr.h"
 #include "PlayerInfo.h"
 #include "AILog.h"
+#include "PeasantJobs.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -61,11 +62,6 @@ static const KeyBuildingDef kKeyBuildings[] = {
 	{ TowerID,   "Towers" },      // defence
 };
 static const int kNKeyBuildings = sizeof(kKeyBuildings) / sizeof(kKeyBuildings[0]);
-
-// Peasant jobs: engine order handlers (DoLink) that mean "working" for a peasant.
-extern void TakeResLink(OneObject* OBJ);    // gathering food/wood/stone (also carrying it to the base)
-extern void BuildObjLink(OneObject* OBJ);   // constructing / repairing a building
-extern void GoToMineLink(OneObject* OB);    // walking to a mine to go inside
 
 static FILE* g_file = NULL;
 static int g_lastGameTime = -1;
@@ -225,7 +221,7 @@ struct MineStat
 
 struct NatStat
 {
-	int Work[7];       // peasant jobs, index = WorkSlot
+	PeasantJobCounts Work;
 	int Peasants;
 	int Military;
 	MineStat Mines[3];
@@ -233,37 +229,6 @@ struct NatStat
 	int Key[8];
 	std::map<std::string, int> Buildings;  // finished buildings by name (barracks etc. differ per nation)
 };
-
-enum WorkSlot { W_FOOD, W_WOOD, W_STONE, W_TOMINE, W_BUILD, W_IDLE, W_OTHER };
-
-// Resources gathered outside mines and the WORK slot of the peasants gathering them.
-struct GatherDef
-{
-	int ResID;
-	WorkSlot Slot;
-};
-static const GatherDef kGatherDefs[] = {
-	{ FoodID,  W_FOOD },   // fields, farms
-	{ TreeID,  W_WOOD },
-	{ StoneID, W_STONE },
-};
-static const int kNGather = sizeof(kGatherDefs) / sizeof(kGatherDefs[0]);
-
-// Current job of a free (not hidden) peasant, from its first order and the resource it carries.
-static WorkSlot PeasantJob(OneObject* OB)
-{
-	Order1* OR1 = OB->LocalOrder;
-	if (!OR1) return W_IDLE;
-	byte res = OB->RType;
-	if (OR1->DoLink == &TakeResLink) res = OR1->info.TakeRes.ResID;
-	else if (OR1->DoLink == &BuildObjLink) return W_BUILD;
-	else if (OR1->DoLink == &GoToMineLink) return W_TOMINE;
-	for (int k = 0; k < kNGather; k++)
-	{
-		if (res == kGatherDefs[k].ResID) return kGatherDefs[k].Slot;
-	}
-	return W_OTHER;
-}
 
 static void AddMine(MineStat& M, OneObject* OB)
 {
@@ -333,7 +298,7 @@ static void Snapshot()
 		memset(S[i].Mines, 0, sizeof(S[i].Mines));
 		memset(&S[i].OtherMines, 0, sizeof(S[i].OtherMines));
 		memset(S[i].Key, 0, sizeof(S[i].Key));
-		memset(S[i].Work, 0, sizeof(S[i].Work));
+		CountPeasantJobs(i, &S[i].Work);
 	}
 	for (int i = 0; i < MAXOBJECT; i++)
 	{
@@ -372,7 +337,6 @@ static void Snapshot()
 		else if (NM->Peasant)
 		{
 			N.Peasants++;
-			if (!OB->Hidden) N.Work[PeasantJob(OB)]++;  // hidden ones are inside mines/buildings, see the mines' Inside
 		}
 		else
 		{
@@ -404,19 +368,9 @@ static void Snapshot()
 		if (N.OtherMines.Count || N.OtherMines.Building) PrintMine("other", N.OtherMines);
 		fputc('\n', g_file);
 		WriteStamp(ni, who);
-		fprintf(g_file, "WORK");
-		{
-			int inside = 0;
-			for (int k = 0; k < kMineKinds; k++) inside += N.Mines[k].Inside;
-			inside += N.OtherMines.Inside;
-			fprintf(g_file, " food=%d wood=%d stone=%d", N.Work[W_FOOD], N.Work[W_WOOD], N.Work[W_STONE]);
-			for (int k = 0; k < kMineKinds; k++) fprintf(g_file, " %s=%d", kMineKindDefs[k].Label, N.Mines[k].Inside);
-			int hiddenElsewhere = N.Peasants - N.Work[W_FOOD] - N.Work[W_WOOD] - N.Work[W_STONE] - N.Work[W_TOMINE]
-				- N.Work[W_BUILD] - N.Work[W_IDLE] - N.Work[W_OTHER] - inside;
-			if (hiddenElsewhere < 0) hiddenElsewhere = 0;
-			fprintf(g_file, " tomine=%d build=%d idle=%d other=%d\n", N.Work[W_TOMINE], N.Work[W_BUILD], N.Work[W_IDLE],
-				N.Work[W_OTHER] + hiddenElsewhere);
-		}
+		fprintf(g_file, "WORK food=%d wood=%d stone=%d", N.Work.Food, N.Work.Wood, N.Work.Stone);
+		for (int k = 0; k < kMineKinds; k++) fprintf(g_file, " %s=%d", kMineKindDefs[k].Label, N.Mines[k].Inside);
+		fprintf(g_file, " tomine=%d build=%d idle=%d other=%d\n", N.Work.ToMine, N.Work.Build, N.Work.Idle, N.Work.Other);
 		WriteStamp(ni, who);
 		PrintDeltas("MADE", NT->NProduced, g_prevProduced[ni], NT, false);
 		WriteStamp(ni, who);

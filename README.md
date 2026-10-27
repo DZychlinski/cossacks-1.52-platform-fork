@@ -328,6 +328,7 @@ previous snapshot, key buildings (`BLD`) and all finished buildings by name (`BL
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
 | Chat messages start with the game time (hours:minutes:seconds), e.g. `[0:12:34] Player: text` (`CreateChatHint`, `Hint.cpp`; used in `Interface.cpp`, `mapa.cpp`, `ActiveScenary.cpp`). Replays show the time stored in the recording; replays recorded before this change have no time | Easier to follow what happened when. |
 | The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |
+| Resource bar shows how many peasants work on each resource: `(n)` at the end of each resource's black field with the amount shifted left of it, and `Idle n` right of the bar (`ShowRMap` in `Nature.cpp`, `PeasantJobs.cpp`, shared with the AI log's `WORK` counter) | Know the economy split at a glance. Display only, counted for the local player from the order each peasant is executing and refreshed every 0.5 s; miners are the peasants inside mines. Requires a screen at least 1280 px wide (HD), which leaves room for `Idle n` right of the 800 px bar. |
 
 ## Possible future work
 
