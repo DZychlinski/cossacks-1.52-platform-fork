@@ -64,6 +64,7 @@ extern BOOL DDError;        // FALSE: всё работает нормально
 extern DDSURFACEDESC ddsd;  // Заглушка для совместимости
 extern HWND hwnd;
 extern bool window_mode;
+extern bool fullscreen_desktop;
 
 // Разрешения экрана
 extern int ModeLX[32];

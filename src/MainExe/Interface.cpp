@@ -6767,7 +6767,20 @@ int processMainMenu()
 	curptr = 0;
 
 	// Переключаем в оконный режим
-	if (gWindow) {
+	if (gWindow && fullscreen_desktop) {
+		// the window keeps covering the screen; only the frame size goes back to the menu's
+		window_mode = true;
+		SDL_SetWindowGrab(gWindow, SDL_FALSE);
+		SDL_ShowCursor(SDL_ENABLE);
+		SDL_SetWindowInputFocus(gWindow);
+		RealLx = 1024;
+		RealLy = 768;
+		menu_x_off = 0;
+		menu_y_off = 0;
+		menu_hint_x = 18;
+		menu_hint_y = 701;
+	}
+	else if (gWindow) {
 		printf("processMainMenu: Restoring windowed mode\n");
 		window_mode = true;
 		SDL_SetWindowFullscreen(gWindow, 0);
@@ -6794,7 +6807,7 @@ int processMainMenu()
 		// Устанавливаем размер по умолчанию, если окно было пересоздано
 		RealLx = 1024;
 		RealLy = 768;
-		if (gWindow) {
+		if (gWindow && !fullscreen_desktop) {
 			SDL_SetWindowSize(gWindow, RealLx, RealLy);
 			SDL_SetWindowPosition(gWindow, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 		}

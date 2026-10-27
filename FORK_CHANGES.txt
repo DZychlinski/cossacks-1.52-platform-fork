@@ -4,3 +4,4 @@ Chat messages stay on screen twice as long (20 seconds) and show the game time, 
 The minimap "under attack" marker flashes four times as long.
 The resource bar shows how many of your peasants work on each resource, and how many are idle.
 New "Normal AI / Insane AI" choice next to the game speed in the single player and multiplayer game setup (host only), see AI_CHANGES.txt.
+The game runs fullscreen from the start (borderless, menu included), so the screen no longer switches resolution when a game starts or ends.

@@ -213,6 +213,16 @@ file (default `en`); files missing from that language fall back to `en`, as in t
 next to the exe, so the exe folder must be writable. Files there also take precedence over the data
 folder.
 
+**Fullscreen.** The game runs in a borderless window covering the screen from the start, menu and game
+alike, so the monitor never switches resolution. The menu (1024x768) and the game resolution are scaled
+to the screen; choose the screen's own resolution in the options for a 1:1 picture. For the old
+behaviour (windowed menu, exclusive fullscreen game) set:
+
+```ini
+[Display]
+Fullscreen=0
+```
+
 ## Nation AI sources
 
 `src/AI/` holds the source of the computer opponents: the community **AI Pack v0.995** (2002,
@@ -334,6 +344,7 @@ later. Add a line there for every change players can notice.
 | The minimap "under attack" marker flashes 240 frames instead of 60 (`kAttackAlarmFrames`, `Nation.cpp`; used in `Nation.cpp`, `Mine.cpp`, `NewMon.cpp`, `ActiveScenary.cpp`, `mapa.cpp`) | Easier to notice. |
 | Resource bar shows how many peasants work on each resource: `(n)` at the end of each resource's black field with the amount shifted left of it, and `Idle n` right of the bar (`ShowRMap` in `Nature.cpp`, `PeasantJobs.cpp`, shared with the AI log's `WORK` counter) | Know the economy split at a glance. Display only, counted for the local player from the order each peasant is executing and refreshed every 0.5 s; miners are the peasants inside mines. Requires a screen at least 1280 px wide (HD), which leaves room for `Idle n` right of the 800 px bar. |
 | Optional "Insane AI" lobby choice (dropdown next to the speed setting; single player and multiplayer, host only, off by default; ported from Emile's remix): `ApplyInsaneStrategy` and the `SmartGamer` attack hold in `Megapolis.cpp` (economy upgrades first, barracks and stables scaled by peasants, pikemen until 3x dragoons+72, no attack before 180 pikemen + 48 dragoons; houses are exempt through `kInsaneExemptUsages`), `g_InsaneAI` in `Ddex1.cpp`/`MapDiscr.h`, `PlayerInfo.InsaneAI` (`PlayerInfo.h`), dropdown in `Interface.cpp`, start packet in `MPlayerStub.cpp` (one DWORD added), recordings version 102 (`Interface.cpp`, `Recorder.cpp`), `# INSANE on/off` in the AI log header (`AILog.cpp`). Not stored in saved games | A harder computer opponent for experienced players. Lobbies with older builds are incompatible (larger `PlayerInfo`, longer start packet). |
+| Borderless fullscreen from the start (native): the window is a screen-sized popup for menu and game, the frame is scaled into it by `SDL_RenderSetLogicalSize`, and mouse coordinates are scaled back (`fullscreen_desktop`, `MapDesktopMouse` in `Ddex1.cpp`; window setup in `CreateDDObjects` (`Ddini.cpp`) and `processMainMenu` (`Interface.cpp`)). `[Display] Fullscreen=0` in `cossacks_native.ini` restores the windowed menu and exclusive fullscreen game | No resolution switch (several seconds of black screen) when a game starts or ends. |
 
 ## Possible future work
 

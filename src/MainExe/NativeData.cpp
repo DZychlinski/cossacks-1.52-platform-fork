@@ -128,6 +128,12 @@ extern "C" int cos_fetch_file(const char* canon)
 
 extern "C" void cos_persist_soon(void) {}
 
+extern "C" int cos_ini_int(const char* section, const char* key, int def)
+{
+    data_resolve();
+    return (int)GetPrivateProfileIntA(section, key, def, g_ini);
+}
+
 extern "C" const char* cos_native_path(const char* vpath, char* out, int n)
 {
     if (!vpath) return vpath;

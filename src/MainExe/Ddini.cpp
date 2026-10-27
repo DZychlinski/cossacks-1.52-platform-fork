@@ -48,6 +48,7 @@ __declspec(dllexport) int COPYSizeX = 800;
 __declspec(dllexport) int Pitch = 800;
 int SCRSZY = 600;
 extern bool window_mode;
+extern bool fullscreen_desktop;
 extern HWND hwnd;
 LPDIRECTDRAW lpDD = nullptr;
 LPDIRECTDRAWSURFACE lpDDSPrimary = nullptr;
@@ -776,7 +777,15 @@ bool CreateDDObjects(HWND hwnd_param) {
 
     hwnd = hwnd_param;
 
-    if (!InGame && !InEditor) {
+    if (!InGame && !InEditor && fullscreen_desktop) {
+        // the window already covers the screen; the 1024x768 menu is scaled into it
+        window_mode = true;
+        RealLx = 1024;
+        RealLy = 768;
+        SDL_SetWindowGrab(gWindow, SDL_FALSE);
+        SDL_ShowCursor(SDL_ENABLE);
+    }
+    else if (!InGame && !InEditor) {
         window_mode = true;
         RealLx = 1024;
         RealLy = 768;
@@ -809,6 +818,11 @@ bool CreateDDObjects(HWND hwnd_param) {
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetWindowResizable(gWindow, SDL_FALSE);
 #else
+        if (fullscreen_desktop) {
+            // no display mode change: the game frame is scaled into the screen-sized window
+            SDL_SetWindowGrab(gWindow, SDL_TRUE);
+            SDL_ShowCursor(SDL_DISABLE);
+        } else {
 #ifndef _WIN32
         // macOS: always use FULLSCREEN_DESKTOP to avoid Cocoa NSView issues
         SDL_SetWindowFullscreen(gWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -839,6 +853,7 @@ bool CreateDDObjects(HWND hwnd_param) {
             style &= ~WS_THICKFRAME;
             SetWindowLong(hwnd_param, GWL_STYLE, style);
             SetWindowPos(hwnd_param, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        }
         }
 #endif  // in-game window setup: __EMSCRIPTEN__ web path vs native fullscreen
     }

@@ -15,6 +15,7 @@
 #endif
 #include <SDL.h>
 #include "ddini.h"
+#include "NativeData.h"
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -300,6 +301,9 @@ int screen_width;
 int screen_height;
 double screen_ratio;
 DWORD window_style = WS_OVERLAPPED | WS_BORDER | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+//Native: borderless window covering the screen for menu and game ([Display] Fullscreen, default 1).
+//The display mode never changes; the renderer scales the frame to the screen and mouse coords are scaled back.
+bool fullscreen_desktop = false;
 
 #include "ResFile.h"
 #include "FastDraw.h"
@@ -777,6 +781,15 @@ void ResizeAndCenterWindow()
 		return;
 	}
 
+	if (fullscreen_desktop)
+	{//The window always covers the screen; restore that in case anything resized it
+		SetWindowLong( hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE );
+		SetWindowPos( hwnd, NULL, 0, 0, screen_width, screen_height, SWP_NOZORDER | SWP_FRAMECHANGED );
+		ClipCursorToWindowArea();
+		SetCursorPos( screen_width / 2, screen_height / 2 );
+		return;
+	}
+
 	RECT window_size;
 	window_size.top = 0;
 	window_size.left = 0;
@@ -1236,10 +1249,37 @@ void OnWTPacket( WPARAM wSerial, LPARAM hCtx );
 
 void CmdEndGame( byte NI, byte state, byte cause );
 
+//fullscreen_desktop: the RealLx x RealLy frame is letterboxed into the screen-sized client area
+//(SDL_RenderSetLogicalSize), so map client mouse coords back to frame coords
+static LPARAM MapDesktopMouse( HWND hWnd, LPARAM lParam )
+{
+	RECT rc;
+	GetClientRect( hWnd, &rc );
+	int cw = rc.right - rc.left;
+	int ch = rc.bottom - rc.top;
+	if (cw <= 0 || ch <= 0 || RealLx <= 0 || RealLy <= 0)
+	{
+		return lParam;
+	}
+	double scale = min( (double) cw / RealLx, (double) ch / RealLy );
+	double ox = ( cw - RealLx * scale ) / 2;
+	double oy = ( ch - RealLy * scale ) / 2;
+	int x = (int) ( ( (short) LOWORD( lParam ) - ox ) / scale );
+	int y = (int) ( ( (short) HIWORD( lParam ) - oy ) / scale );
+	x = max( 0, min( x, RealLx - 1 ) );
+	y = max( 0, min( y, RealLy - 1 ) );
+	return MAKELPARAM( x, y );
+}
+
 LRESULT FAR PASCAL WindowProc( HWND hWnd, UINT message,
 	WPARAM wParam, LPARAM lParam )
 {
 	static BYTE phase = 0;
+
+	if (fullscreen_desktop && message >= WM_MOUSEMOVE && message <= WM_MBUTTONDBLCLK)
+	{
+		lParam = MapDesktopMouse( hWnd, lParam );
+	}
 
 	switch (message)
 	{
@@ -2602,7 +2642,7 @@ static BOOL doInit( HINSTANCE hInstance, int nCmdShow )
 	RegisterClass( &wc );
 	dbglog("  doInit: RegisterClass done\n");
 
-	if (window_mode)
+	if (window_mode && !fullscreen_desktop)
 	{
 		dbglog("  doInit: CreateWindow (windowed, %dx%d)...\n", RealLx, RealLy);
 		hwnd = CreateWindow(
@@ -3826,6 +3866,9 @@ int PASCAL WinMain(
 	SDL_GetVersion(&linked);
 	dbglog("SDL version: linked %d.%d.%d\n", linked.major, linked.minor, linked.patch);
 	window_mode = true; //Принудительно для стабильности эмуляции DirectDraw  в SDL2
+#ifdef _MSC_VER
+	fullscreen_desktop = cos_ini_int( "Display", "Fullscreen", 1 ) != 0;
+#endif
 	char* ss = strstr(lpCmdLine, "/MAPEDITOR");
 	if (ss)
 	{
