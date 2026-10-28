@@ -305,7 +305,7 @@ void LandScript00(){
 	RunUpgrade(&KIRASIR_US5);
 	if(!UpgIsRun(&KIRASIR_US5)) return;
 
-	SetUnit(&ARTDEPO, 3);
+	SetUnit(&ARTDEPO, AI_ARTDEPO_MAX);
 	SetUnit(&KAZ18, 1);
 	RunUpgrade(&AKASBUIL);
 	if(!UpgIsRun(&AKASBUIL) && GetUnits(&KAZ18)<1) return;
@@ -547,7 +547,7 @@ void LandScript01(){
 	RunUpgrade(&AKASTR2);
 	RunUpgrade(&AKASTR3);
 	RunUpgrade(&AKASTR4);
-	SetUnit(&ARTDEPO, 3);
+	SetUnit(&ARTDEPO, AI_ARTDEPO_MAX);
 	SetUnit(&KAZ18, 4);
 
 	if(GetUnits(&KAZ18)<3) return;
@@ -816,7 +816,7 @@ void LandScript03(){	//For T
 	RunUpgrade(&KIRASIR_US5);
 	if(!UpgIsRun(&KIRASIR_US5)) return;
 
-	SetUnit(&ARTDEPO, 3);
+	SetUnit(&ARTDEPO, AI_ARTDEPO_MAX);
 	SetUnit(&KAZ18, 1);
 	RunUpgrade(&AKASBUIL);
 	if(!UpgIsRun(&AKASBUIL) && GetUnits(&KAZ18)<1) return;

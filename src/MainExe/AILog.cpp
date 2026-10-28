@@ -367,13 +367,13 @@ static void Snapshot()
 		NatStat& N = S[ni];
 		const char* who = WhoTag(ni);
 		WriteStamp(ni, who);
-		fprintf(g_file, "SNAP nation=%s name=%s\n", NationName(ni), PlayerName(ni));
+		fprintf(g_file, "SNAP nation=%s name=%s difficulty=%d\n", NationName(ni), PlayerName(ni), int(CITY[ni].Difficulty));
 		WriteStamp(ni, who);
-		fprintf(g_file, "RES  food=%d wood=%d stone=%d gold=%d iron=%d coal=%d\n",
+		fprintf(g_file, "RES  %d food, %d wood, %d stone, %d gold, %d iron, %d coal\n",
 			XRESRC(ni, FoodID), XRESRC(ni, TreeID), XRESRC(ni, StoneID),
 			XRESRC(ni, GoldID), XRESRC(ni, IronID), XRESRC(ni, CoalID));
 		WriteStamp(ni, who);
-		fprintf(g_file, "GATH food=%d wood=%d stone=%d gold=%d iron=%d coal=%d (gathered so far)\n",
+		fprintf(g_file, "GATH %d food, %d wood, %d stone, %d gold, %d iron, %d coal (gathered so far)\n",
 			NT->ResTotal[FoodID], NT->ResTotal[TreeID], NT->ResTotal[StoneID],
 			NT->ResTotal[GoldID], NT->ResTotal[IronID], NT->ResTotal[CoalID]);
 		WriteStamp(ni, who);
@@ -385,9 +385,9 @@ static void Snapshot()
 		if (N.OtherMines.Count || N.OtherMines.Building) PrintMine("other", N.OtherMines);
 		fputc('\n', g_file);
 		WriteStamp(ni, who);
-		fprintf(g_file, "WORK food=%d wood=%d stone=%d", N.Work.Food, N.Work.Wood, N.Work.Stone);
-		for (int k = 0; k < kMineKinds; k++) fprintf(g_file, " %s=%d", kMineKindDefs[k].Label, N.Mines[k].Inside);
-		fprintf(g_file, " tomine=%d build=%d idle=%d other=%d\n", N.Work.ToMine, N.Work.Build, N.Work.Idle, N.Work.Other);
+		fprintf(g_file, "WORK %d food, %d wood, %d stone", N.Work.Food, N.Work.Wood, N.Work.Stone);
+		for (int k = 0; k < kMineKinds; k++) fprintf(g_file, ", %d %s", N.Mines[k].Inside, kMineKindDefs[k].Label);
+		fprintf(g_file, ", %d tomine, %d build, %d idle, %d other\n", N.Work.ToMine, N.Work.Build, N.Work.Idle, N.Work.Other);
 		WriteStamp(ni, who);
 		PrintDeltas("MADE", NT->NProduced, g_prevProduced[ni], NT, false);
 		WriteStamp(ni, who);
@@ -445,7 +445,7 @@ void AILog_PDist(int NI, int OnFood, int OnWood, int OnStone)
 	last[0] = OnFood;
 	last[1] = OnWood;
 	last[2] = OnStone;
-	AILog_Event(NI, "PDIST food=%d wood=%d stone=%d (relative weights of the peasants gathering each)", OnFood, OnWood, OnStone);
+	AILog_Event(NI, "PDIST %d food, %d wood, %d stone (relative weights of the peasants gathering each)", OnFood, OnWood, OnStone);
 }
 
 void AILog_MineRules(int NI, const int* Table)

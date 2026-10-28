@@ -12,6 +12,7 @@ public:
 	//32 -right button active
 	//64 -left  button active
     //128-memory for hint was allocated
+	//1024-integer value is a unit count (no infinity sign below kIconMaxCount)
 	byte  Color;
 	int   Health;
 	int   MaxHealth;
@@ -44,6 +45,7 @@ public:
     void AssignHealth(int Health,int MaxHeath);
     void AssignStage(int Stage,int MaxStage);
     void AssignIntVal(int ival);
+	void AssignCount(int count);//Fork: unit counts
     void AssignLeft(HandlePro* Lpro,int param);
     void AssignRight(HandlePro* Hpro,int param);
 	void AssignMoveOver(HandlePro* Hpro,int param);

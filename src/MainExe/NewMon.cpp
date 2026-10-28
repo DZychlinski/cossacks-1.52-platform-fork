@@ -10804,6 +10804,7 @@ void B_BitvaLink( Brigade* BR );
 void GrenaderSupermanLink( OneObject* OBJ );
 void EraseBrigade( Brigade* BR );
 void SetAttState( Brigade* BR, bool Val );
+word SearchVictim( OneObject* OBJ, int R0, int R1 );
 bool OneObject::AttackObj( word OID, int Prio1, byte OrdType, word NTimes )
 {
 	if ( Sdoxlo || Hidden || UnlimitedMotion || !Ready )
@@ -11060,6 +11061,16 @@ bool OneObject::AttackObj( word OID, int Prio1, byte OrdType, word NTimes )
 					OneObject* OB = Group[mem[i]];
 					if ( OB != this && OB->EnemyID == 0xFFFF )
 					{
+						//Fork: in AI formations each shooter takes the enemy nearest to itself (the whole
+						//formation fired at one unit); the shared target only when none is in its range
+						if ( Nat->AI_Enabled )
+						{
+							word own = ::SearchVictim( OB, 0, OB->Ref.General->MoreCharacter->MaxR_Attack );
+							if ( own != 0xFFFF && OB->AttackObj( own, Prio, OrdType, NTimes ) )
+							{
+								continue;
+							}
+						}
 						OB->AttackObj( OID, Prio, OrdType, NTimes );
 					}
 				}

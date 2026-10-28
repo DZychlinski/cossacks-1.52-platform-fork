@@ -935,7 +935,7 @@ bool CreateInsideList( IconSet* IS, byte NI )
 			if (!GO || !GO->newMons)continue;
 			NewMonster* NM = GO->newMons;
 			OneIcon* OI = IS->AddIcon( NM->IconFileID, NM->IconID, 0, NM->Message );
-			OI->AssignIntVal( Nmons[i] );
+			OI->AssignCount( Nmons[i] );
 			OI->AssignLeft( &PushUnitOutOfMine, i );
 			Pres = 1;
 		};

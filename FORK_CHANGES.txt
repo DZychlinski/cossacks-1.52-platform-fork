@@ -9,3 +9,4 @@ The game runs fullscreen from the start (borderless, menu included), so the scre
 A building that is researching still counts as present for requirements, e.g. the 18th century no longer waits for a busy Blacksmith or Academy.
 Each new chat message shows the last 10 chat messages again.
 Upgrades being researched in your buildings are listed at the top right with percent done.
+Unit counts over icons (selected units, formations, units in a mine) show numbers up to 9999 instead of the infinity sign.

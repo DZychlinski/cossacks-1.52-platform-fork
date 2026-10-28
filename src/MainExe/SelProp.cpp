@@ -561,7 +561,7 @@ void ShowProp()
 			char sxt[128];
 			GetChar( MI->RF, sxt );
 			OneIcon* OI = PrpPanel.AddIcon( NM->IconFileID, NM->IconID, 0xD0 + ( NatRefTBL[MyNation] << 2 ), sxt );
-			OI->AssignIntVal( MI->N );
+			OI->AssignCount( MI->N );
 			OI->AssignHealth( MI->Life, MI->MaxLife );
 			if (( !OBJ->Ready ) && OBJ->NUstages)
 			{
@@ -633,7 +633,7 @@ void ShowProp()
 				}
 				if (N)
 				{
-					OI->AssignIntVal( N );
+					OI->AssignCount( N );
 				}
 				if (MaxLife)
 				{
@@ -886,7 +886,7 @@ void ShowProp()
 						int M = BR->BM.Infantry + BR->BM.Grenaderov + BR->BM.Strelkov + BR->BM.Peons;
 						if (BR->Memb[0] != 0xFFFF)M--;
 						if (BR->Memb[1] != 0xFFFF)M--;
-						OI->AssignIntVal( M );
+						OI->AssignCount( M );
 						OI->AssignMoveOver( &PreBrig, BR->ID );
 						OI->AssignIntParam( j + 1 );
 						if (SEL)OI->SelectIcon();

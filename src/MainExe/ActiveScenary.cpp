@@ -5567,8 +5567,17 @@ byte INVECO[6] = { 2,5,4,0,1,3 };
 void PerformTorg( byte Nation, byte SellRes, byte BuyRes, int SellAmount );
 
 //Performs market exchange for bots
+int ForkLimitAISale( City* CT, int SellRes, int BuyRes, int SellAmount );//Megapolis.cpp
 extern "C" __declspec( dllexport ) void AI_Torg( byte SellRes, byte BuyRes, int SellAmount )
 {
+	if ( AiIsRunNow )
+	{
+		SellAmount = ForkLimitAISale( CCIT, INVECO[SellRes], INVECO[BuyRes], SellAmount );
+		if ( SellAmount <= 0 )
+		{
+			return;
+		}
+	}
 	PerformTorg( CNAT->NNUM, INVECO[SellRes], INVECO[BuyRes], SellAmount );
 }
 

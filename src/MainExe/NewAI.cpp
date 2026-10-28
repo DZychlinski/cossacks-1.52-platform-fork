@@ -379,23 +379,126 @@ bool SearchPlace(int* xx1, int* yy1, SearchFunction* SFN, int r)
 	};
 	return false;
 };
-bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int xc, int yc, int xe, int ye)
+//Fork: storehouse place for the AI. A free spot at the edge of a forest or stone field (unserved wood or stone
+//within kSkladAdjacent) with the most wood and stone within kSkladReach that no storehouse or Town Centre of the
+//player serves yet (within kSkladServed), nearer cells weighing more, less its distance from the start point.
+//Before, the first spot next to any tree or stone on a spiral from the Town Centre was taken, so new storehouses
+//went next to old ones or wherever there was room; without the edge rule a spot halfway between two forests
+//won because it reached both. Cells are InfoMap cells (128 px).
+static const int kSkladReach = 5;        //wood and stone this close to the spot count
+static const int kSkladAdjacent = 2;     //the spot touches a forest or stone field: unserved wood/stone this close
+static const int kSkladServed = 6;       //wood and stone this close to a storehouse or Town Centre are served already
+static const int kSkladMinCells = 6;     //fewer unserved wood/stone cells: not worth a storehouse
+static const int kSkladWeightFactor = 2; //a cell weighs kSkladReach + 1 - its distance; times this vs cells of distance
+static const int kSkladMaxRadius = 40;
+static const int kSkladGrid = 2 * (kSkladMaxRadius + kSkladReach) + 1;
+bool SearchSkladPlace(int* xx1, int* yy1, int r, const int* depX, const int* depY, int nDep, int resources, int* resMask)
 {
-	if (NPORTS > 1)return SearchPlace(xx1, yy1, SFN, r);
+	if (r > kSkladMaxRadius)r = kSkladMaxRadius;
+	SsMaxX = msx >> 2;
+	SsMaxY = msy >> 2;
+	int x0 = *xx1;
+	int y0 = *yy1;
+	int MyTop = GetTopology(x0 << 7, y0 << 7);
+	if (MyTop >= 0xFFFE)return false;
+	//unserved wood (1) and stone (2) per cell around the start point
+	static byte unserved[kSkladGrid * kSkladGrid];
+	int R = r + kSkladReach;
+	int w = R + R + 1;
+	for (int iy = 0; iy < w; iy++)
+	{
+		for (int ix = 0; ix < w; ix++)
+		{
+			int cx = x0 - R + ix;
+			int cy = y0 - R + iy;
+			byte v = 0;
+			if (cx > 0 && cy > 0 && cx < SsMaxX && cy < SsMaxY)
+			{
+				v = InfoMap[cx + cy * VAL_SPRNX] & resources;
+				for (int d = 0; d < nDep && v; d++)
+				{
+					if (Norma(cx - depX[d], cy - depY[d]) <= kSkladServed)v = 0;
+				}
+			}
+			unserved[ix + iy * w] = v;
+		}
+	}
+	int bestScore = 0;
+	int bestX = -1;
+	int bestY = -1;
+	int bestMask = 0;
+	for (int dy = -r; dy <= r; dy++)
+	{
+		for (int dx = -r; dx <= r; dx++)
+		{
+			int dist = Norma(dx, dy);
+			if (dist > r)continue;
+			int x = x0 + dx;
+			int y = y0 + dy;
+			if (x <= 1 || y <= 1 || x >= SsMaxX - 1 || y >= SsMaxY - 1)continue;
+			int ofst = x + y * VAL_SPRNX;
+			if (CantBuild[ofst] & CB_Sklad)continue;
+			if (!((InfoMap[ofst] & 4) && (InfoMap[ofst + 1] & 4) && (InfoMap[ofst + VAL_SPRNX] & 4) && (InfoMap[ofst + VAL_SPRNX + 1] & 4)))continue;
+			if (GNFO.EINF[CURRENTAINATION]->GetSafeVal(x, y))continue;
+			int top = TopRef[x + x + (y << (TopSH + 1))];
+			if (top >= 0xFFFE)continue;
+			if (top != MyTop && LinksDist[MyTop * NAreas + top] >= 0xFFFF)continue;//not reachable on foot
+			int cells = 0;
+			int weight = 0;
+			int nearest = kSkladReach + 1;
+			int mask = 0;
+			for (int ry = -kSkladReach; ry <= kSkladReach; ry++)
+			{
+				for (int rx = -kSkladReach; rx <= kSkladReach; rx++)
+				{
+					int d = Norma(rx, ry);
+					if (d > kSkladReach)continue;
+					byte v = unserved[(dx + rx + R) + (dy + ry + R) * w];
+					if (v)
+					{
+						cells++;
+						weight += kSkladReach + 1 - d;
+						if (d < nearest)nearest = d;
+						mask |= v;
+					}
+				}
+			}
+			if (cells < kSkladMinCells || nearest > kSkladAdjacent)continue;
+			int score = weight * kSkladWeightFactor - dist;
+			if (bestX == -1 || score > bestScore)
+			{
+				bestScore = score;
+				bestX = x;
+				bestY = y;
+				bestMask = mask;
+			}
+		}
+	}
+	if (bestX == -1)return false;
+	*xx1 = bestX;
+	*yy1 = bestY;
+	*resMask = bestMask;
+	return true;
+}
+
+//Fork: towers on rings from rMin outwards (the edge of the base), facing the enemy first (toEnemy: xe, ye is its
+//side), then any side. Before: the Town Centre's own spot first, from the second tower on the first free spot
+//anywhere near the Town Centre, and the "enemy" was player 0 only (else the map corner): towers clumped inside
+//the base and their fire hit its own buildings.
+bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, int xc, int yc, int xe, int ye, bool toEnemy)
+{
 	SsMaxX = msx >> 2;
 	SsMaxY = msy >> 2;
 	int x = *xx1;
 	int y = *yy1;
-	if (SFN(x, y))
-	{
-		//assert(y<17648);
-		return true;
-	};
+	if (r > RRad)r = RRad;
 	int MyTop = GetTopology(x << 7, y << 7);
 	if (MyTop >= 0xFFFE)return false;
 	MyTop *= NAreas;
+	for (int pass = toEnemy ? 0 : 1; pass < 2; pass++)
+	{
 	int PrevTopDst = 0;
-	for (int i = 6; i < r; i++)
+	for (int i = rMin; i < r; i++)
 	{
 		char* xi = Rarr[i].xi;
 		char* yi = Rarr[i].yi;
@@ -404,7 +507,7 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int xc, in
 		{
 			int xx = x + xi[j];
 			int yy = y + yi[j];
-			if ((xx - xc) * (xe - xc) + (yy - yc) * (ye - yc) > 0 && xx > 0 && yy > 0 && xx < SsMaxX && yy < SsMaxY)
+			if ((pass || (xx - xc) * (xe - xc) + (yy - yc) * (ye - yc) > 0) && xx > 0 && yy > 0 && xx < SsMaxX && yy < SsMaxY)
 			{
 				if (!GNFO.EINF[CURRENTAINATION]->GetSafeVal(xx, yy))
 				{
@@ -427,6 +530,7 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int xc, in
 			};
 		};
 	};
+	}
 	return false;
 };
 bool FindCenter(int* xx, int* yy, byte NI)

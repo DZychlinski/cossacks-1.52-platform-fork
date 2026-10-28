@@ -32,5 +32,7 @@ bool CheckFarm(int x,int y);
 bool CheckBuilding(int x,int y);
 bool CheckPort(int x,int y);
 bool SearchPlace(int* xx,int* yy,SearchFunction* SFN,int r);
+//Fork: resources: 1 = wood, 2 = stone (InfoMap bits) to look for; resMask: those near the place found
+bool SearchSkladPlace(int* xx,int* yy,int r,const int* depX,const int* depY,int nDep,int resources,int* resMask);
 bool FindCenter(int* xx,int *yy,byte NI);
 void SetUnusable(int x,int y,byte Mask);

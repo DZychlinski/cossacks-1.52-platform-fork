@@ -14,3 +14,29 @@ Computer players keep enough peasants on food for their whole population and tra
 Each computer player can be set to "Insane" in the game setup (Very hard plus the Insane AI strategy for that player only).
 Computer players defend their base: soldiers waiting at home attack enemies nearby instead of standing still.
 Insane AI attacks once 300 soldiers wait, even without enough dragoons.
+Computer players keep upgrading all their mines after the first plan, lowest level first, whenever they can afford it; far mines only to level 4.
+In the 18th century, with more than 200,000 food, computer players send half of their food peasants to wood and stone.
+Computer players with resources to spare build more Town Centres and Stables.
+Computer players always keep at least a quarter of their peasants on wood and stone, both of them.
+Computer players train fast cavalry and send it on raids of 100 riders, later 150-300.
+Large computer armies no longer stop in front of towers.
+Computer players stop training soldiers while their food is about to run out; Insane AI researches farming upgrades first.
+Computer players build their first Storehouses close to the Town Centre.
+Computer players defend their base with their whole home army, also cavalry, archers and mercenaries.
+Computer players keep their fast cavalry for raids and train it slowly before minute 20.
+Computer players keep at least a tenth of their peasants on stone.
+Computer players research tower upgrades beyond level 3 only in the 18th century.
+Computer players with enough gold miners keep 600,000 wood and stone instead of selling it for gold.
+Computer players upgrade their fast cavalry once they have three 18th-century barracks.
+Computer players defend against armies at their base only, also against shooters; fast cavalry stays home for raids.
+Computer players build towers at the edge of their base, facing the enemy.
+The Insane AI settings read "Insane (experimental)" and "Insane AI (experimental)".
+Computer players place Storehouses at the edge of forests and stone fields that no Storehouse serves yet.
+Computer peasants spread over all Storehouses instead of crowding at the nearest one.
+Computer formations of shooters spread their fire instead of all shooting at the same enemy.
+Computer armies keep fighting until the battle is over: melee formations no longer march, stop and march again.
+Computer defenders who chase attackers keep fighting instead of walking home while being shot.
+Computer players build up to 6 Artillery Depots.
+Computer players see enemy armies again: they defend their base and their armies and raids avoid stronger enemies.
+Computer players save gold for the 18th century instead of spending it all on mercenaries.
+Computer players on the easiest level send fast cavalry with their armies instead of keeping it home for raids.

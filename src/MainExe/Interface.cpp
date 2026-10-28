@@ -3084,7 +3084,7 @@ bool MPL_WaitingGame(bool Host, bool SINGLE)
 		COMPS[i]->AddLine(GetTextByID("@RMID_NORMAL"));
 		COMPS[i]->AddLine(GetTextByID("@RMID_HARD"));
 		COMPS[i]->AddLine(GetTextByID("@RMID_VERYHARD"));
-		COMPS[i]->AddLine((char*)"Insane");//kInsaneDifficulty: Very hard plus the Insane AI strategy for this player
+		COMPS[i]->AddLine((char*)"Insane (experimental)");//kInsaneDifficulty: Very hard plus the Insane AI strategy for this player
 
 		COMPS[i]->Visible = 0;
 		COMPS[i]->Enabled = 0;
@@ -3318,7 +3318,7 @@ bool MPL_WaitingGame(bool Host, bool SINGLE)
 	ComboBox* insane_ai = MENU.addGP_ComboBox(nullptr,
 		650, 380, BTNS.GPID, 76, 9, 0, &WhiteFont, &YellowFont, nullptr);
 	insane_ai->AddLine("Normal AI");
-	insane_ai->AddLine("Insane AI");
+	insane_ai->AddLine("Insane AI (experimental)");
 	insane_ai->CurLine = 0;
 	insane_ai->Enabled = Host;
 

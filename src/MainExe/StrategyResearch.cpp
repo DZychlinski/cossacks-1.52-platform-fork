@@ -282,15 +282,80 @@ void GlobalArmyInfo::ResearchArmyDistribution(byte NI)
 			SINFO = &CIN[mapEntry];
 		}
 
+		//Fork: StrCod gives the field index in CellInfo (the original did ((word*)SINFO)[ID]++);
+		//the port's switch counted swordsmen as cavalry, shooters as artillery and so on
 		switch (ID) {
-		case 0: SINFO->NCaval++; break;
-		case 1: SINFO->NMort++;  break;
-		case 2: SINFO->NPush++;  break;
-		case 3: SINFO->NStrel++; break;
-		case 4: SINFO->NSword++; break;
+		case 0: SINFO->NSword++; break;
+		case 1: SINFO->NStrel++; break;
+		case 2: SINFO->NCaval++; break;
+		case 3: SINFO->NPush++;  break;
+		case 4: SINFO->NMort++;  break;
 		case 5: SINFO->NTow++;   break;
 		}
 		SINFO->Total += NM->Force;
+	}
+
+	//Fork: join neighbouring occupied cells into armies, as the original did. The port's rewrite stopped
+	//after filling the cells, so NArmy stayed 0: the AI never saw an enemy army (no base defence,
+	//no danger checks for its own armies and raids).
+	static int* s_Stack = NULL;
+	static int s_StackSize = 0;
+	if (s_StackSize < NCIN) {
+		int* ns = (int*)realloc(s_Stack, NCIN * sizeof(int));
+		if (!ns)
+			return;
+		s_Stack = ns;
+		s_StackSize = NCIN;
+	}
+	for (int i = 0; i < NCIN; ++i)
+		CIN[i].ArmyID = 0xFFFF;
+	for (int i = 0; i < NCIN; ++i) {
+		if (CIN[i].ArmyID != 0xFFFF)
+			continue;
+		if (NArmy >= MaxArmy) {
+			ArmyInfo* na = (ArmyInfo*)realloc(AINF, (MaxArmy + 32) * sizeof(ArmyInfo));
+			if (!na)
+				return;
+			AINF = na;
+			MaxArmy += 32;
+		}
+		ArmyInfo* Ari = AINF + NArmy;
+		memset(Ari, 0, sizeof(ArmyInfo));
+		Ari->MinX = 255;
+		Ari->MinY = 255;
+		int total = 0;
+		int sp = 0;
+		CIN[i].ArmyID = (word)NArmy;
+		s_Stack[sp++] = i;
+		while (sp) {
+			CellInfo* CI = CIN + s_Stack[--sp];
+			Ari->NSword += CI->NSword;
+			Ari->NStrel += CI->NStrel;
+			Ari->NCaval += CI->NCaval;
+			Ari->NPush += CI->NPush;
+			Ari->NMort += CI->NMort;
+			Ari->NTow += CI->NTow;
+			total += CI->Total;
+			if (CI->x < Ari->MinX) Ari->MinX = CI->x;
+			if (CI->x > Ari->MaxX) Ari->MaxX = CI->x;
+			if (CI->y < Ari->MinY) Ari->MinY = CI->y;
+			if (CI->y > Ari->MaxY) Ari->MaxY = CI->y;
+			const int dx[4] = { 1, -1, 0, 0 };
+			const int dy[4] = { 0, 0, 1, -1 };
+			for (int d = 0; d < 4; ++d) {
+				int nx = int(CI->x) + dx[d];
+				int ny = int(CI->y) + dy[d];
+				if (nx < 0 || ny < 0 || nx >= StratLx || ny >= StratLy)
+					continue;
+				word ne = ArmDistr[nx + (ny << StratSH)];
+				if (ne != 0xFFFF && CIN[ne].ArmyID == 0xFFFF) {
+					CIN[ne].ArmyID = (word)NArmy;
+					s_Stack[sp++] = ne;
+				}
+			}
+		}
+		Ari->N = (word)(total > 0xFFFF ? 0xFFFF : total);
+		++NArmy;
 	}
 }
 

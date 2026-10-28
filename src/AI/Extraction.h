@@ -9,11 +9,14 @@
 #define AI_OPTIONAL_STOREHOUSES_COST_PERCENT 50
 #define AI_STOREHOUSE_PERIOD_SEC         300  // and one more Storehouse every 5 minutes of game time after that (they stopped at 4)
 #define AI_CHURCHES_MAX                  5    // one church per Town Centre, at most this many
+#define AI_ARTDEPO_MAX                   6    // artillery depots in the late stages (was 3)
 #define AI_EXTRA_CHURCHES_COST_PERCENT   60   // churches after the first (each gives population)
 #define AI_EXTRA_MILLS_COST_PERCENT      60   // one Mill per Town Centre: mills after the first two
 #define AI_PEASANTS_FIRST                60   // below this many peasants they may cost up to AI_PEASANTS_FIRST_COST_PERCENT of the stock (else 20)
 #define AI_PEASANTS_FIRST_COST_PERCENT   60   // early military used up the stock and peasants (20%) never got their turn
 #define AI_SOLDIERS_PER_PEASANT          3    // no new infantry while there are more per peasant: the army starved the economy
+#define AI_RICH_MAX                      1000 // a rich AI builds more Town Centres and Stables than the fixed counts below,
+#define AI_RICH_COST_PERCENT             20   // one more whenever it costs at most this share of the stockpile
 // Fork: one church per Town Centre (at least 1), at most AI_CHURCHES_MAX
 int ChurchTarget(){
 	int n = GetUnits(&CENTER);
@@ -360,7 +363,7 @@ void Buildings(){
 	TryUnit(&MELN, GetUnits(&CENTER), AI_EXTRA_MILLS_COST_PERCENT, 100);
 
 	TryUnit(&ARTDEPO, 1 , 100, 100);
-	if(UpgIsDone(&PUSHKA_UB0)) TryUnit(&ARTDEPO, 3 , 40, 100); //Added UpgIsDone condition to prevent buildings of unneccessary art dept in non-cannon games
+	if(UpgIsDone(&PUSHKA_UB0)) TryUnit(&ARTDEPO, AI_ARTDEPO_MAX , 40, 100); //Added UpgIsDone condition to prevent buildings of unneccessary art dept in non-cannon games
 
 	if(GetPeaceTimeLeft()<3){
 		TryUnit(&DIPCENTER, 1, 100, 100);
@@ -370,6 +373,9 @@ void Buildings(){
 	if(GetUnits(&CENTER)<2) return;
 
 	TryUnit(&STABLE, 3, 100, 100);
+	// Fork: with resources to spare, no fixed limit (they stopped at 5-6 with millions in stock)
+	TryUnit(&CENTER, AI_RICH_MAX, AI_RICH_COST_PERCENT, 100);
+	TryUnit(&STABLE, AI_RICH_MAX, AI_RICH_COST_PERCENT, 100);
 //	if(GetUnits(&KAZ18))
 
 //	if(UpgIsDone(&AKASBUIL))
@@ -750,9 +756,13 @@ void Towers(){
 	TryUpgrade(&TOWERUP1,50,100);
 	TryUpgrade(&TOWERUP2,40,100);
 	TryUpgrade(&TOWERUP3,30,100);
-	TryUpgrade(&TOWERUP4,20,100);
-	TryUpgrade(&TOWERUP5,15,100);
-	TryUpgrade(&TOWERUP6,10,100);
+	// Fork: levels 4-6 ("Increase number of defensive cannon") only in the 18th century: a 17th-century AI
+	// researched the chain a dozen times within a minute and spent its early army on it
+	if(UpgIsDone(&XVIII)){
+		TryUpgrade(&TOWERUP4,20,100);
+		TryUpgrade(&TOWERUP5,15,100);
+		TryUpgrade(&TOWERUP6,10,100);
+	};
 };
 
 void BuildingsMillions(){
@@ -790,7 +800,7 @@ void BuildingsMillions(){
 		TryUnit(&STABLE, 7, 100, 100);
 
 	if(GetUnits(&ARTDEPO)-GetReadyUnits(&ARTDEPO)==0)
-		TryUnit(&ARTDEPO, 3, 100, 100);
+		TryUnit(&ARTDEPO, AI_ARTDEPO_MAX, 100, 100);
 
 	if(GetUnits(&KAZ18)>5){
 		TryUnit(&KAZ17,GetUnits(&KAZ17)+1,100,100);

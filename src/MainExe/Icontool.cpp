@@ -155,6 +155,17 @@ void OneIcon::AssignIntVal( int ival )
 	IntVal = ival;
 }
 
+//Fork: IntVal 1200 means "endless" for production queues; unit counts (selection, formations, mines)
+//are shown as numbers while they fit in 4 digits, which still fit over the icon
+static const int kIconInfiniteQueue = 1200;
+static const int kIconMaxCount = 9999;
+void OneIcon::AssignCount( int count )
+{
+	if (count < 1)return;
+	Type |= 8 | 1024;
+	IntVal = count;
+}
+
 void OneIcon::AssignIntParam( int i )
 {
 	Type |= 256;
@@ -260,7 +271,8 @@ void OneIcon::Draw( int x, int y )
 	};
 	if (Type & 8)
 	{//integer value
-		if (IntVal >= 1200)
+		bool isCount = ( Type & 1024 ) != 0;
+		if (isCount ? IntVal > kIconMaxCount : IntVal >= kIconInfiniteQueue)
 		{
 			byte c = 0xA5;
 			int x0 = x + 3;
@@ -270,8 +282,8 @@ void OneIcon::Draw( int x, int y )
 			//DrawInf(x0+1,y0,0xAE);
 			//DrawInf(x0,y0+1,0xAE);
 			DrawInf( x0 + 1, y0 + 1, 0xAE );
-			int N = IntVal / 1200;
-			if (N > 1)
+			int N = IntVal / kIconInfiniteQueue;
+			if (N > 1 && !isCount)
 			{
 				char ss[16];
 				sprintf( ss, "%d", N );
