@@ -575,6 +575,8 @@ public:
 	int  GetFreeBrigade();
 	void ExecuteBrigades();
 	void CalculateBalance();
+	void KeepEnoughFoodWorkers();
+	void EngageIdleSoldiers();//Fork: idle soldiers attack enemies in a wider radius (Megapolis.cpp)//Fork: food workers for the whole population (Megapolis.cpp)
 	void GetNextPlaceForFarm( int* x, int* y );
 	void UnRegisterNewUnit( OneObject* OB );
 	void RegisterWaterBrigade( int ID );

@@ -6,7 +6,11 @@ Computer players with large populations build houses in time, so their growth do
 Optional "Insane AI" lobby setting: computer players rush economy upgrades and mass pikemen and dragoons before attacking (ported from Emile's remix).
 Computer players build one more Storehouse every 5 minutes after the first 4.
 Computer players build one church per Town Centre, up to 5.
-Computer players upgrade their mines in order: all near gold mines to level 2, one iron and one coal mine to level 2, one gold mine to the top, then the rest to level 2; they save resources for it.
+Computer players upgrade one gold mine early, a second after 7.5 minutes, and the rest of their mines after 15 minutes (one gold mine to the top), saving resources for it only from then on.
 Insane AI no longer waits for dragoons it cannot train yet before attacking.
-Computer players also take the mines at unused starting positions.
+Computer players also take the mines at unused starting positions, and build a coal mine after 2 gold and 1 iron mine.
 Computer players build one Mill per Town Centre.
+Computer players keep enough peasants on food for their whole population and train peasants before a large army.
+Each computer player can be set to "Insane" in the game setup (Very hard plus the Insane AI strategy for that player only).
+Computer players defend their base: soldiers waiting at home attack enemies nearby instead of standing still.
+Insane AI attacks once 300 soldiers wait, even without enough dragoons.

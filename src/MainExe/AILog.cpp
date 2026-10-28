@@ -8,6 +8,7 @@
 #include "mouse.h"
 #include "menu.h"
 #include "MapDiscr.h"
+#include "Megapolis.h"
 #include "PlayerInfo.h"
 #include "AILog.h"
 #include "PeasantJobs.h"
@@ -18,6 +19,8 @@
 #include <string>
 
 extern int GameTime;       // game seconds, 0 at game start (mapa.cpp)
+extern bool g_AutoPilot;   // Interface.cpp: [Debug] AutoPilot, the AI plays the local player
+extern City CITY[8];       // Account = the score the game shows
 extern PlayerInfo PINFO[8];
 extern char** NatNames;
 extern int NNations;
@@ -66,6 +69,8 @@ static const int kNKeyBuildings = sizeof(kKeyBuildings) / sizeof(kKeyBuildings[0
 static FILE* g_file = NULL;
 static int g_lastGameTime = -1;
 static int g_nextSnapshot = 0;
+static int g_playersMask = 0;            // nations listed in the header
+static bool g_lastTeamLogged = false;
 static char g_exeDir[MAX_PATH];
 
 // Change detection for AI proposals / settings, and baselines for the per-minute unit counters.
@@ -97,6 +102,7 @@ static void CloseLog()
 		g_file = NULL;
 	}
 	g_nextSnapshot = 0;
+	g_lastTeamLogged = false;
 }
 
 const char* AILog_ResName(int ResID)
@@ -122,8 +128,16 @@ static PlayerInfo* PlayerOf(int NI)
 
 static const char* NationName(int NI)
 {
-	PlayerInfo* P = PlayerOf(NI);
-	if (P && NatNames && P->NationID < NNations && NatNames[P->NationID]) return NatNames[P->NationID];
+	// NatNames is indexed by a unit's own nation (as in the selection panel), not by PINFO.NationID
+	int N = NtNUnits[NI];
+	word* units = NatList[NI];
+	for (int i = 0; i < N && NatNames; i++)
+	{
+		if (units[i] == 0xFFFF) continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->Ref.General->NatID < NNations && NatNames[OB->Ref.General->NatID])
+			return NatNames[OB->Ref.General->NatID];
+	}
 	return "?";
 }
 
@@ -159,12 +173,15 @@ static void OpenLog()
 	fprintf(g_file, "# Cossacks AI log, started %04d-%02d-%02d %02d:%02d:%02d\n",
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 	fprintf(g_file, "# INSANE %s\n", g_InsaneAI ? "on" : "off");
+	if (g_AutoPilot) fprintf(g_file, "# AUTOPILOT on (the AI plays the local player)\n");
+	g_playersMask = 0;
 	for (int ni = 0; ni < 8; ni++)
 	{
 		if (NationInGame(ni))
 		{
-			fprintf(g_file, "# P%d %s nation=%s name=%s\n", ni, NATIONS[ni].AI_Enabled ? "AI" : "HUMAN",
-				NationName(ni), PlayerName(ni));
+			g_playersMask |= 1 << ni;
+			fprintf(g_file, "# P%d %s nation=%s name=%s%s\n", ni, NATIONS[ni].AI_Enabled ? "AI" : "HUMAN",
+				NationName(ni), PlayerName(ni), NATIONS[ni].AI_Enabled && (g_InsaneAI || g_InsaneNation[ni]) ? " insane=yes" : "");
 		}
 	}
 	fflush(g_file);
@@ -448,6 +465,49 @@ void AILog_MineRules(int NI, const int* Table)
 	AILog_Event(NI, "MINE-RULES (3 values per group; groups: gold,iron,coal for level I, then II, then III) %s", buf);
 }
 
+// Fork: the end of the game.
+
+// Lowest nation of the only team still alive, -1 while two or more teams fight (allies share NMask bits)
+static int LastTeamLeader()
+{
+	int first = -1;
+	for (int ni = 0; ni < kNNations; ni++)
+	{
+		if (!(g_playersMask & (1 << ni)) || NtNUnits[ni] <= 0) continue;
+		if (first == -1) first = ni;
+		else if (!(NATIONS[first].NMask & NATIONS[ni].NMask)) return -1;
+	}
+	return first;
+}
+
+static void WriteSummary(const char* what)
+{
+	fprintf(g_file, "%02d:%02d %s length=%d:%02d\n", GameTime / 60, GameTime % 60, what, GameTime / 60, GameTime % 60);
+	for (int ni = 0; ni < kNNations; ni++)
+	{
+		if (!(g_playersMask & (1 << ni))) continue;
+		fprintf(g_file, "%02d:%02d   P%d %-5s nation=%s alive=%s score=%d units=%d\n", GameTime / 60, GameTime % 60,
+			ni, WhoTag(ni), NationName(ni), NtNUnits[ni] > 0 ? "yes" : "no", CITY[ni].Account, NtNUnits[ni]);
+	}
+	fflush(g_file);
+}
+
+static void LogLastTeam()
+{
+	if (!g_lastTeamLogged && LastTeamLeader() >= 0)
+	{
+		g_lastTeamLogged = true;
+		WriteSummary("LAST-TEAM-STANDING");
+	}
+}
+
+void AILog_GameOver()
+{
+	if (!g_file) return;
+	WriteSummary("END");
+	CloseLog();
+}
+
 void AILog_Tick()
 {
 	if (GameTime < g_lastGameTime) CloseLog();
@@ -457,5 +517,6 @@ void AILog_Tick()
 	if (!EnsureLog()) return;
 	g_nextSnapshot = GameTime - GameTime % kSnapshotPeriodSec + kSnapshotPeriodSec;
 	Snapshot();
+	LogLastTeam();
 }
 #endif

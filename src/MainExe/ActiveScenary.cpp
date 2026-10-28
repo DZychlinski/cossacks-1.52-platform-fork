@@ -3655,11 +3655,14 @@ extern "C" __declspec( dllexport ) int GetGlobalTime()
 {
 	return REALTIME;
 }
-//Fork: game time in seconds since the game started (the clock of the in-game timer; kept in saved games)
-extern int GameTime;
+//Fork: game time in seconds for AI rules, counted in game steps (tmtmt: about 40 per second in Slow and in
+//Fast mode, so it follows the in-game clock), identical on every computer of a multiplayer game and kept
+//in saved games. The in-game clock (GameTime) follows the real time and would desync; REALTIME adds the
+//speed factor and ran twice as fast in Fast mode.
+static const int kGameStepsPerSecond = 40;
 extern "C" __declspec( dllexport ) int GetGameSeconds()
 {
-	return GameTime;
+	return tmtmt / kGameStepsPerSecond;
 }
 //---------------------------Dynamical zones-----------------------------//
 extern "C" __declspec( dllexport ) bool UnitsCenter( GAMEOBJ* DstZone, GAMEOBJ* Units, word R )

@@ -193,6 +193,9 @@ void AddUN(char* File, int Line, int Param, int Type);
 
 //"Insane AI" lobby option (single and multiplayer). 0 or 1, set at game start from the host, same for all players.
 extern byte g_InsaneAI;
+extern byte g_InsaneNation[8];//per computer player, see Ddex1.cpp
+const int kInsaneDifficulty = 5;//lobby difficulty line "Insane": Very hard plus the Insane strategy
+const int kVeryHardDifficulty = 4;
 byte SanitizeInsaneAI(int enabled);
 
 //New monster format

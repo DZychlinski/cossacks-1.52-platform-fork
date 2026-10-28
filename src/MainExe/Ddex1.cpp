@@ -451,6 +451,7 @@ __declspec( dllexport ) char LobbyVersion[32] = "1.52";
 __declspec( dllexport ) char BuildVersion[32] = "V 1.52";
 
 byte g_InsaneAI = 0;
+byte g_InsaneNation[8] = {};//Fork: Insane AI for single computer players (lobby difficulty "Insane"), by nation index
 
 byte SanitizeInsaneAI(int enabled)
 {

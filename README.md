@@ -237,6 +237,18 @@ behaviour (windowed menu, exclusive fullscreen game) set:
 Fullscreen=0
 ```
 
+**AI test games.** Set this in `cossacks_native.ini` to let the AI play your own nation in single player
+games, so computer players can fight each other while you watch:
+
+```ini
+[Debug]
+AutoPilot=1
+```
+
+`AutoPilot=2` does the same with the Insane AI strategy. The AI takes over from the first second with the hardest computer player's difficulty (at most Very hard), the fog of war
+is off, and the game goes on after your nation is defeated. The `ai` chat cheat takes control back.
+The AI log marks the game `# AUTOPILOT on`. Random maps only; ignored in multiplayer.
+
 ## Nation AI sources
 
 `src/AI/` holds the source of the computer opponents: the community **AI Pack v0.995** (2002,
@@ -270,9 +282,12 @@ optional: the AI builds it when it can afford it and otherwise carries on with t
 |---|---|
 | Town Centres 3–5 are optional right after the "2 Town Centres finished" gate (before: the 4th came late behind a gate, the 5th only after the 18th century and the Academy building upgrade) | up to `AI_OPTIONAL_CENTERS` = 5, at most `AI_OPTIONAL_CENTERS_COST_PERCENT` = 75% of the stockpile |
 | Storehouses 2–4 are optional right after the same gate (before: 1 until 4 Town Centres were finished) | up to `AI_OPTIONAL_STOREHOUSES` = 4, at most `AI_OPTIONAL_STOREHOUSES_COST_PERCENT` = 50% of the stockpile |
-| One more Storehouse every 5 minutes of game time after the first 4 (they stopped at 4) | `AI_STOREHOUSE_PERIOD_SEC` = 300, same cost limit |
+| One more Storehouse every 5 minutes of game time after the first 4 (they stopped at 4); game time is counted in game steps (about 40 per second in Slow and Fast mode, so it follows the in-game clock) so all computers of a multiplayer game agree | `AI_STOREHOUSE_PERIOD_SEC` = 300, same cost limit |
 | One church per Town Centre, up to 5 (before: 1) | `AI_CHURCHES_MAX` = 5, extra churches at most `AI_EXTRA_CHURCHES_COST_PERCENT` = 60% of the stockpile |
 | One Mill per Town Centre (before: at most 2) | extra mills at most `AI_EXTRA_MILLS_COST_PERCENT` = 60% of the stockpile |
+| Peasants first: below 60 peasants a peasant may cost up to 60% of the stockpile (before: 20%, so early infantry used up the stock and peasant training stalled) | `AI_PEASANTS_FIRST` = 60, `AI_PEASANTS_FIRST_COST_PERCENT` = 60 |
+| No new infantry while there are more than 3 per peasant (the army ate more food than the peasants gathered and starved) | `AI_SOLDIERS_PER_PEASANT` = 3 |
+| The optional Town Centres and Storehouses wait for 2 finished Town Centres also at 1000 start resources (the original gate is skipped there, so 4 Storehouses went up in the first minute) | — |
 | 18c barracks: no count limit beyond the original first 3 (before: max 3, later 6) | `AI_KAZ18_MAX` = 1000, at most `AI_KAZ18_COST_PERCENT` = 90% of the stockpile; each barracks costs twice the previous one, which limits them naturally |
 | 18th century first: it is proposed at the top of `Buildings()`, ahead of every building and upgrade (before: at the end of `Upgrades()`), and the market starts saving food, gold and iron for it once the Academy's AKAWOOD upgrade runs (before: only after the later AKASTN2) | `AI_XVIII_COST_PERCENT` = 98% (unchanged) |
 
@@ -305,7 +320,9 @@ population, houses, peasants, military and 18th century state (`POP`), gold/iron
 miners inside / capacity and upgrade levels (`MINE`), **what the peasants are doing right now**
 (`WORK`: gathering food/wood/stone, miners inside gold/iron/coal mines, `tomine` walking to a mine,
 `build`, `idle`, `other`), units produced (`MADE`) and units or buildings lost (`LOST`) since the
-previous snapshot, key buildings (`BLD`) and all finished buildings by name (`BLDN`).
+previous snapshot, key buildings (`BLD`) and all finished buildings by name (`BLDN`). A `LAST-TEAM-STANDING` line lists
+every player once only one team is left alive, and `END` lists every player (alive, score, units)
+when the game is closed.
 
 ```
 00:00 P1 AI    BUILD Town Centre
@@ -354,10 +371,13 @@ later. Add a line there for every change players can notice.
 | `COS_USE_REBUILT_AI` CMake option (ON) with an `AI_Deploy` target copying the rebuilt AI DLLs into `ai\` next to the exe | Plays against the AI built from source; it runs after `dmcr`'s post-build step, which copies the shipped `ai/` folder. |
 | `src/AI/Extraction.h`: optional Town Centres 3–5 (≤75% of stockpile), optional Storehouses 2–4 (≤50%) and one more every 5 minutes of game time (new engine export `GetGameSeconds` in `ActiveScenary.cpp`), one church per Town Centre up to 5 (≤60%), one Mill per Town Centre (≤60%), unlimited 18c barracks (≤90%), 18th century first and saved for earlier | The AI's economy stayed far behind a human's in long games; see [AI changes](#ai-changes). |
 | `Megapolis.cpp`: computer players above 500 population keep at least 80 free population places (house building) | The original buffer stops at 60 free places, too little for large late-game populations. Applies to all builds and all computer players. |
-| AI mines (`ForkMinePlan`, `MineReserveBlocks` in `Megapolis.cpp`, replacing `City::UpgradeMines`): while the nation script allows mine upgrades, the AI upgrades in phases: every near gold mine to level 2, then the nearest iron and the nearest coal mine to level 2, then one gold mine to the top level, then every other mine (far ones too) to level 2, nearest first. If the next upgrade is too expensive, its cost is held back from other AI spending except houses, peasants, the 18th century (`kMineReserveExemptUsages`) and, while saving for the top gold mine, the first 18c barracks (a building the 18th century unlocks) | The original rule needed the upgrade to cost at most 25–90% of the stock, so the expensive levels (25,000+ food) never happened and mines stayed at level 1–2. Applies to all computer players. |
+| AI mines (`ForkMinePlan`, `MineReserveBlocks` in `Megapolis.cpp`, replacing `City::UpgradeMines`): while the nation script allows mine upgrades: before minute 15 only one gold mine to level 2 (a second one from minute 7.5), paid only when affordable, nothing held back (`kMinePlanSecondGoldSec`, `kMinePlanFullSec`; game-step minutes from `GetGameSeconds`, which follow the in-game clock). From minute 15 the AI upgrades in phases: every near gold mine to level 2, then the nearest iron and the nearest coal mine to level 2, then one gold mine to the top level, then every other mine (far ones too) to level 2, nearest first. If the next upgrade is too expensive, its cost is held back from other AI spending except houses, peasants and the 18th century (`kMineReserveExemptUsages`); buildings are held back only while saving for the top gold mine, and even then not the first 18c barracks (a building the 18th century unlocks). The AI log writes `RESERVE-SKIP` when a project is held back | The original rule needed the upgrade to cost at most 25–90% of the stock, so the expensive levels (25,000+ food) never happened and mines stayed at level 1–2. Applies to all computer players. |
 | Requirements (e.g. the 18th century needs the Blacksmith, Academy, Stables …) count a finished building while it researches (`HasTypeResearching` in `City::RefreshAbility`, `Megapolis.cpp`) | A building is not "ready" during research; with the fork's long upgrades a busy Blacksmith locked the 18th century for half an hour. Applies to everyone. |
-| Insane AI attack hold waits for 48 dragoons only once dragoons can be trained (`SmartGamer`, `Megapolis.cpp`) | Nations whose only dragoons are 18th-century ones never attacked before the 18th century. |
-| AI mine capture distance is at least the map width (`TakeNewMineBrain`, `Megapolis.cpp`; before: `MINE_CAPTURE_RADIUS`, about 250 cells) | Mines are spawned at every possible starting position, also unused ones; the AI now takes those too, nearest safe mine first. |
+| Insane AI for single computer players: the lobby difficulty list of each computer slot has a sixth entry, "Insane" = Very hard plus the Insane strategy for that player only (`kInsaneDifficulty` in `MapDiscr.h`, packed in the slot's existing 3 difficulty bits, so lobbies and recordings need no new fields; `g_InsaneNation` in `Ddex1.cpp`, `IsInsaneAI` in `Megapolis.cpp`); the global Insane option still applies to all computer players; the AI log header marks Insane players `insane=yes` | Normal and Insane computer players can be compared in the same game. |
+| Insane AI attack hold waits for 48 dragoons only once dragoons can be trained, and attacks anyway once 300 soldiers wait (`SmartGamer`, `Megapolis.cpp`) | Nations whose only dragoons are 18th-century ones never attacked before the 18th century; dragoons that kept dying held the army at home for good. |
+| AI soldiers waiting at home attack the nearest enemy within 1,200 px, checked every 16 game steps (`City::EngageIdleSoldiers`, `Megapolis.cpp`; units marching in an army, artillery, officers and drummers are left alone) | On their own they only searched their short radius, so an army shooting the base from further away, or standing next to a building that trains units, met no resistance. |
+| AI mine capture (`TakeNewMineBrain`, `Megapolis.cpp`): distance at least the map width (before: `MINE_CAPTURE_RADIUS`, about 250 cells); the AI's mines are counted by the resource they produce (`CountMinesByRes`; the `UID_MINE` offsets did not match); with 2 gold and 1 iron mine but no coal mine the next one is coal (`kMinGoldBeforeCoal`, `kMinIronBeforeCoal`) | Mines are spawned at every possible starting position, also unused ones; the AI now takes those too, nearest safe mine first. The scripts' capture tables never ask for coal, so the AI had none. |
+| AI food workers (`City::KeepEnoughFoodWorkers`, `Megapolis.cpp`): at least one food gatherer per 6 people (per 4 while the food stock is below 1000), taken from the wood and stone quotas, which keep a quarter; not above 3,000 food in stock; Insane AI trains no more than 3 soldiers per peasant | The scripts' food/wood/stone weights ignore the population; AI players ran out of food after about 5 minutes and their units starved. Applies to all computer players. |
 | `COS_AI_DEBUG_CHAT` CMake option (OFF): `src/AI/Ai.h` reports accepted `TryUnit` building projects through the new engine export `AIReportProject` (`ActiveScenary.cpp`), bound optionally so DLLs still load with an exe without it | Shows what the AI decides to build and confirms the rebuilt AI is running. See **Debug chat** above. |
 | `COS_AI_LOG` CMake option (OFF): `AILog.cpp` writes `ai_logs\ai_<time>.log` with what every player built, upgraded and traded, what the AI scripts wanted and why they skipped it, and a per-minute snapshot (economy, peasant jobs, units made and lost) of every player (hooks in `Megapolis.cpp`, `Multi.cpp`, `NewMon.cpp`, `Upgrade.cpp`, `Economy.cpp`, `ActiveScenary.cpp`, `Ddex1.cpp`) | Answers why the AI gathers less gold and iron than the human and lets the AI be tuned against a human game. See **AI activity log** above. |
 | Chat messages stay 20 s instead of 10 s (`kChatMessageDisplayTime`, `Hint.cpp`) | They disappeared too fast to read. |
@@ -369,6 +389,7 @@ later. Add a line there for every change players can notice.
 | Borderless fullscreen from the start (native): the window is a screen-sized popup for menu and game, the frame is scaled into it by `SDL_RenderSetLogicalSize`, and mouse coordinates are scaled back (`fullscreen_desktop`, `MapDesktopMouse` in `Ddex1.cpp`; window setup in `CreateDDObjects` (`Ddini.cpp`) and `processMainMenu` (`Interface.cpp`)). `[Display] Fullscreen=0` in `cossacks_native.ini` restores the windowed menu and exclusive fullscreen game | No resolution switch (several seconds of black screen) when a game starts or ends. |
 | Research list: upgrades being researched in any of your buildings are listed at the top right below the resource bar, with percent done, most advanced first, at most 12 lines (`ShowResearchList` in `Nature.cpp`) | See all running research without clicking each building. Display only. |
 | Chat history: every new chat message (yours, other players', the AI's) shows the last 10 chat messages again with their times, oldest on top (`CreateChatHint` in `Hint.cpp`) | Conversations stay readable after older lines timed out. |
+| `[Debug] AutoPilot=1` in `cossacks_native.ini`: the AI plays the local player in single player random map games from the start (`StartAutoPilot` in `Interface.cpp`, same start as the computer players with the hardest one's difficulty), fog off, no defeat screen for the local player (`ShowWinner`, `mapa.cpp`); the AI log gets `LAST-TEAM-STANDING` and `END` lines (`AILog.cpp`) | Unattended AI-against-AI test games whose logs show what to fix. |
 
 ## Possible future work
 

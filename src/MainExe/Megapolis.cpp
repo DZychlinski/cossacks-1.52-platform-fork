@@ -1422,9 +1422,15 @@ static void KeepExemptProjectsFirst(City* city, int projectCount)
 	}
 }
 
+//Insane AI for every computer player (lobby option) or for this one (lobby difficulty "Insane")
+static bool IsInsaneAI(Nation* nation)
+{
+	return g_InsaneAI || g_InsaneNation[nation->NNUM];
+}
+
 static int ApplyInsaneStrategy(City* city, int projectCount)
 {
-	if (!g_InsaneAI)return projectCount;
+	if (!IsInsaneAI(city->Nat))return projectCount;
 
 	Nation* nation = city->Nat;
 	const word barracksType = FindInsaneProducerType(nation, LightInfID, false);
@@ -1469,6 +1475,11 @@ static int ApplyInsaneStrategy(City* city, int projectCount)
 	}
 	else if (pikeProject != 0xFFFF)trainingProject = pikeProject;
 	else trainingProject = dragoonProject;
+	//Fork: no more soldiers than kInsaneSoldiersPerPeasant per peasant (as AI_SOLDIERS_PER_PEASANT in Extraction.h):
+	//a bigger army eats more food than the peasants gather and starves
+	const int kInsaneSoldiersPerPeasant = 3;
+	int soldiers = (pikeType != 0xFFFF ? city->UnitAmount[pikeType] : 0) + (dragoonType != 0xFFFF ? city->UnitAmount[dragoonType] : 0);
+	if (soldiers > city->UnitAmount[nation->UID_PEASANT] * kInsaneSoldiersPerPeasant)trainingProject = 0xFFFF;
 	AppendProject(city, projectCount, trainingProject);
 
 	KeepExemptProjectsFirst(city, projectCount);
@@ -2503,7 +2514,8 @@ static word RemapBuildingToNation(Nation* Nat, word idx)
 }
 
 //Fork: AI mine upgrade plan, replacing City::UpgradeMines (whose percent-of-stock rule never fired for the
-//expensive levels). Phases, each finished before the next:
+//expensive levels). Before kMinePlanFullSec only gold mines to level 2 (one, a second after
+//kMinePlanSecondGoldSec), paid only when affordable. Then phases, each finished before the next:
 //  1. every near gold mine to level 2 (cheap, quick gold)
 //  2. the nearest iron mine and the nearest coal mine to level 2
 //  3. one near gold mine all the way to the top level
@@ -2511,6 +2523,9 @@ static word RemapBuildingToNation(Nation* Nat, word idx)
 //"Near" = within the nation's MINE_UPGRADE1_RADIUS of the Town Centre (as in UpgradeMines). While the chosen
 //upgrade is not affordable, its cost is held back from other AI spending (MineReserveBlocks).
 static const int kMineBasicLevel = 1;//upgrades done at "level 2" in the game
+static const int kMinePlanSecondGoldSec = 450;//7.5 min: a second gold mine to level 2
+static const int kMinePlanFullSec = 900;      //15 min: the full plan, with resources held back for it
+extern "C" int GetGameSeconds();//ActiveScenary.cpp: game-step clock, the same on every computer
 static const int kMinePlanMaxMines = 64;
 
 struct MinePlanMine
@@ -2605,6 +2620,32 @@ static MinePlanResult ForkMinePlan(City* CT)
 	}
 
 	int target = -1;
+	int gameSec = GetGameSeconds();
+	if (gameSec < kMinePlanFullSec)
+	{//early game: the army comes first. One gold mine to level 2, a second one after kMinePlanSecondGoldSec;
+		//nothing is held back for them (upgraded only when the AI can pay right away)
+		int allowed = gameSec < kMinePlanSecondGoldSec ? 1 : 2;
+		int started = 0;
+		for (int i = 0; i < NM; i++)
+		{
+			if (M[i].Res == GoldID && (M[i].Lev >= kMineBasicLevel || M[i].Busy))started++;
+		}
+		if (started >= allowed)return R;
+		for (int i = 0; i < NM; i++)
+		{
+			if (MineNearGold(M[i]) && M[i].Lev < kMineBasicLevel && !M[i].Busy && M[i].CanUp &&
+				(target == -1 || M[i].Dist < M[target].Dist))target = i;
+		}
+		if (target == -1)return R;
+		word upg = MUP->UIDS[M[target].Lev];
+		NewUpgrade* NU = Nat->UPGRADE[upg];
+		for (int i = 0; i < 8; i++)
+		{
+			if (XRESRC(Nat->NNUM, i) < NU->Cost[i])return R;
+		}
+		M[target].OB->PerformUpgrade(upg, M[target].OB->Index);
+		return R;
+	}
 	MinePlanStep step = MinePlanToBasic(M, NM, &MineNearGold, &target);
 	if (step == MPS_DONE)step = MinePlanOneBasic(M, NM, IronID, &target);
 	if (step == MPS_DONE)step = MinePlanOneBasic(M, NM, CoalID, &target);
@@ -2704,13 +2745,34 @@ static bool MineReserveBlocks(City* CT, const ProposedProject* PRP, const MinePl
 		{
 			if (exempt.Usage == usage)return false;
 		}
+		//buildings are held back only while saving for the top gold mine: the cheap phases blocked
+		//the second barracks and Town Hall (they cost gold) and stalled production
+		if (!plan.FullGoldPhase && Nat->Mon[PRP->NIndex]->newMons->Building)return false;
 		//saving for the top gold mine takes long: the first 18c barracks may still be built meanwhile
 		if (plan.FullGoldPhase && IsFirstCenturyBuilding(CT, PRP->NIndex))return false;
 		GetUnitCost(Nat->NNUM, PRP->NIndex, cost);
 	}
 	for (int i = 0; i < 8; i++)
 	{
-		if (plan.Reserve[i] && cost[i] && XRESRC(Nat->NNUM, i) - cost[i] < int(plan.Reserve[i]))return true;
+		if (plan.Reserve[i] && cost[i] && XRESRC(Nat->NNUM, i) - cost[i] < int(plan.Reserve[i]))
+		{
+#ifdef AILOG_ENABLED
+			//once per project and minute of game time (several projects alternate every tick)
+			const int kSlots = 32;
+			static int loggedKey[8][kSlots];
+			static int loggedAt[8][kSlots];
+			int key = PRP->PKind * 65536 + PRP->NIndex + 1;
+			int slot = key % kSlots;
+			if (loggedKey[Nat->NNUM][slot] != key || GetGameSeconds() - loggedAt[Nat->NNUM][slot] >= 60)
+			{
+				loggedKey[Nat->NNUM][slot] = key;
+				loggedAt[Nat->NNUM][slot] = GetGameSeconds();
+				const char* name = PRP->PKind == 1 ? Nat->UPGRADE[PRP->NIndex]->Message : Nat->Mon[PRP->NIndex]->Message;
+				AILog_Event(Nat->NNUM, "RESERVE-SKIP %s (%s held back for a mine upgrade)", name ? name : "?", AILog_ResName(i));
+			}
+#endif
+			return true;
+		}
 	}
 	return false;
 }
@@ -2751,6 +2813,7 @@ void City::ProcessCreation()
 	if (CenterFound)
 	{
 		SmartGamer(this);
+		EngageIdleSoldiers();
 		FarmsUnderConstruction = 0;
 
 		HandleConstructions();
@@ -3528,6 +3591,24 @@ int* ResTBL = DefaultResTBL;
 int  NInResTBL = 6;
 extern int tmtmt;
 bool CheckBuildPossibility(byte NI, int x, int y);
+static const int kMinGoldBeforeCoal = 2;
+static const int kMinIronBeforeCoal = 1;
+
+//Mines of the nation producing resource res, finished or under construction
+static int CountMinesByRes(Nation* NT, int res)
+{
+	int n = 0;
+	int N = NtNUnits[NT->NNUM];
+	word* units = NatList[NT->NNUM];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->newMons->Usage == MineID && OB->RType == res)n++;
+	}
+	return n;
+}
+
 void TakeNewMineBrain(Idea* ID)
 {
 	City* CT = ID->CT;
@@ -3547,9 +3628,10 @@ void TakeNewMineBrain(Idea* ID)
 	int TopC = GetTopology(CT->CenterX << 7, CT->CenterY << 7);
 	bool Special = false;
 	int ResID = IronID;
-	int NMinFE = CT->UnitAmount[CT->Nat->UID_MINE + 1];
-	int NMinGL = CT->UnitAmount[CT->Nat->UID_MINE];
-	int NMinCO = CT->UnitAmount[CT->Nat->UID_MINE + 2];
+	//Fork: counted by the resource each mine produces (the UID_MINE offsets did not match the mine types)
+	int NMinFE = CountMinesByRes(NT, IronID);
+	int NMinGL = CountMinesByRes(NT, GoldID);
+	int NMinCO = CountMinesByRes(NT, CoalID);
 	//if(!NMinFE)Special=true;
 	int RSM = NMinGL + (NMinFE << 8) + (NMinCO << 16);
 	for (int u = 0; u < NInResTBL; u++)if (ResTBL[u + u] == RSM)
@@ -3557,6 +3639,12 @@ void TakeNewMineBrain(Idea* ID)
 		Special = true;
 		ResID = ResTBL[u + u + 1];
 	};
+	//Fork: the scripts' tables never ask for coal; after 2 gold mines and 1 iron mine take a coal mine
+	if (NMinCO == 0 && NMinGL >= kMinGoldBeforeCoal && NMinFE >= kMinIronBeforeCoal)
+	{
+		Special = true;
+		ResID = CoalID;
+	}
 
 BeginMine:
 	IDI = -1;
@@ -4154,6 +4242,63 @@ void City::ProtectMine()
 		PR1->NBrigs++;
 	};
 };
+//Fork: every unit eats, but the scripts' food/wood/stone weights ignore the population: the AI starved
+//(food 0, peasants and soldiers dying) after a few minutes. AI logs: one field worker feeds about 8 people.
+static const int kPeopleFedPerFoodWorker = 6;          //with a margin
+static const int kLowFoodStock = 1000;
+static const int kPeopleFedPerFoodWorkerLowStock = 4;  //refill the stock
+static const int kHighFoodStock = 3000;                //enough food: the scripts' weights apply unchanged
+//At least one food worker per kPeopleFedPerFoodWorker people, taken from the wood and stone quotas
+//(which keep at least a quarter of their peasants)
+void City::KeepEnoughFoodWorkers()
+{
+	int food = XRESRC(NI, FoodID);
+	if (food > kHighFoodStock)return;//a surplus took the wood and stone peasants and stopped all building
+	int perWorker = food < kLowFoodStock ? kPeopleFedPerFoodWorkerLowStock : kPeopleFedPerFoodWorker;
+	int needFood = (Nat->NGidot + perWorker - 1) / perWorker;
+	int woodStone = NeedPW + NeedPS;
+	int maxFood = NeedPF + woodStone - woodStone / 4;
+	if (needFood > maxFood)needFood = maxFood;
+	if (NeedPF >= needFood || woodStone <= 0)return;
+	int take = needFood - NeedPF;
+	int fromWood = take * NeedPW / woodStone;
+	int fromStone = take - fromWood;
+	if (fromStone > NeedPS)
+	{
+		fromWood += fromStone - NeedPS;
+		fromStone = NeedPS;
+	}
+	NeedPW -= fromWood;
+	NeedPS -= fromStone;
+	NeedPF = needFood;
+}
+
+//Fork: AI soldiers waiting at home (the base groups, not armies on the march) attack the nearest enemy within
+//kAIEngageRadius, an attack-move of sorts. On their own they only searched their short radius, so an army
+//shooting the base from further away, or standing next to a building that trains units, met no resistance.
+static const int kAIEngageRadius = 1200;  //px, beyond musket and bow range
+static const int kAIEngagePeriod = 16;    //game steps between two checks of one nation
+word SearchVictim(OneObject* OBJ, int R0, int R1);
+extern int tmtmt;
+void City::EngageIdleSoldiers()
+{
+	if ((tmtmt + NI) % kAIEngagePeriod)return;
+	int N = NtNUnits[NI];
+	word* units = NatList[NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (!OB || OB->Sdoxlo || OB->Hidden || OB->LocalOrder || OB->Zombi)continue;//busy, inside, or AI artillery
+		NewMonster* NM = OB->newMons;
+		if (NM->Building || NM->Peasant || NM->Artilery || NM->Officer || NM->Baraban || OB->Wall)continue;
+		word br = OB->BrigadeID;
+		if (br != 0xFFFF && br != Agressors.ID && br != FreeArmy.ID && br != Guards.ID && br != Defenders.ID)continue;//in an army
+		word victim = SearchVictim(OB, 0, kAIEngageRadius);
+		if (victim != 0xFFFF)OB->AttackObj(victim, 128 + 16, 0);
+	}
+}
+
 void City::CalculateBalance()
 {
 	NPeas = UnitAmount[Nat->UID_PEASANT];
@@ -4178,6 +4323,7 @@ void City::CalculateBalance()
 		NeedPW = (POnWood * NeedOnRes) / tot;
 		NeedPS = (POnStone * NeedOnRes) / tot;
 		NeedPF = NeedOnRes - NeedPW - NeedPS;
+		KeepEnoughFoodWorkers();
 	};/*else{
 		word nn=Nat->NPBal;
 		word* pp=Nat->PBalance;
@@ -6673,7 +6819,7 @@ void SmartGamer(City* CT)
 		//Insane AI: hold attacks until 180 pikemen + 48 dragoons are ready, then send them together
 		bool combinedInsaneAssault = false;
 		int AType = -1;
-		if (g_InsaneAI && !CT->DefenceStage)
+		if (IsInsaneAI(CT->Nat) && !CT->DefenceStage)
 		{
 			word barracksType = FindInsaneProducerType(CT->Nat, LightInfID, false);
 			word stableType = FindInsaneProducerType(CT->Nat, HorseStrelokID, true);
@@ -6683,8 +6829,10 @@ void SmartGamer(City* CT)
 			//waiting for them before the 18th century held every attack back)
 			word dragoonType = FindProducedUnitType(CT->Nat, stableType, HorseStrelokID);
 			bool dragoonsTrainable = dragoonType != 0xFFFF && CT->Nat->Mon[dragoonType]->Enabled;
+			//or a large army of any mix: dragoons kept dying in fights and the army waited at home for good
+			const int kInsaneMassAssault = 300;
 			combinedInsaneAssault = barracksType != 0xFFFF && pikes >= 180 &&
-				(!dragoonsTrainable || dragoons >= 48);
+				(!dragoonsTrainable || dragoons >= 48 || CT->Agressors.NMemb >= kInsaneMassAssault);
 			if (combinedInsaneAssault)AType = 0;
 			else if (barracksType == 0xFFFF)AType = CheckMinArmyCreationAbility(&CT->Agressors);
 		}

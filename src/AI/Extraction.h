@@ -11,6 +11,9 @@
 #define AI_CHURCHES_MAX                  5    // one church per Town Centre, at most this many
 #define AI_EXTRA_CHURCHES_COST_PERCENT   60   // churches after the first (each gives population)
 #define AI_EXTRA_MILLS_COST_PERCENT      60   // one Mill per Town Centre: mills after the first two
+#define AI_PEASANTS_FIRST                60   // below this many peasants they may cost up to AI_PEASANTS_FIRST_COST_PERCENT of the stock (else 20)
+#define AI_PEASANTS_FIRST_COST_PERCENT   60   // early military used up the stock and peasants (20%) never got their turn
+#define AI_SOLDIERS_PER_PEASANT          3    // no new infantry while there are more per peasant: the army starved the economy
 // Fork: one church per Town Centre (at least 1), at most AI_CHURCHES_MAX
 int ChurchTarget(){
 	int n = GetUnits(&CENTER);
@@ -334,9 +337,12 @@ void Buildings(){
 	TryUnit(&KUZNICA, 1, 100, 100);
 	TryUnit(&CENTER, 2, 100, 100);	
 	if(GetReadyUnits(&CENTER)<2 && GetStartRes()!=SR_1000) return;
-	TryUnit(&CENTER, AI_OPTIONAL_CENTERS, AI_OPTIONAL_CENTERS_COST_PERCENT, 100);
-	TryUnit(&SKLAD, AI_OPTIONAL_STOREHOUSES, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
-	TryUnit(&SKLAD, GetGameSeconds()/AI_STOREHOUSE_PERIOD_SEC, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
+	// Fork: the gate above is skipped at 1000 start resources; the optional ones still wait for 2 Town Centres
+	if(GetReadyUnits(&CENTER)>=2){
+		TryUnit(&CENTER, AI_OPTIONAL_CENTERS, AI_OPTIONAL_CENTERS_COST_PERCENT, 100);
+		TryUnit(&SKLAD, AI_OPTIONAL_STOREHOUSES, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
+		TryUnit(&SKLAD, GetGameSeconds()/AI_STOREHOUSE_PERIOD_SEC, AI_OPTIONAL_STOREHOUSES_COST_PERCENT, 100);
+	};
 
 	TryUnit(&KAZ17, 1, 100, 100);		
 	TryUnit(&AKADEMIA, 1, 100, 100);
@@ -414,10 +420,10 @@ void Units(){
 
 	// Produce
 	for(int i=0; i<2; i++){
-		TryUnit(&PEASANT, 1500, 20, 100);
+		TryUnit(&PEASANT, 1500, GetUnits(&PEASANT)<AI_PEASANTS_FIRST ? AI_PEASANTS_FIRST_COST_PERCENT : 20, 100);
 //---added--------------------------------------
 //		if(GetPeaceTimeLeft()<=GetMaxPeaceTime()/2+GetMaxPeaceTime()/5 || GetReadyUnits(&KAZ18)>0){
-		if(GetPeaceTimeLeft()<=20){
+		if(GetPeaceTimeLeft()<=20 && GetUnits(&INFANTRY)<=GetUnits(&PEASANT)*AI_SOLDIERS_PER_PEASANT){
 			if(GetUnits(&INFANTRY)<140){
 					TryUnit(&INFANTRY, 800, 20, 100);
 			}else{

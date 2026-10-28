@@ -13,6 +13,9 @@ void AILog_Event(int NI, const char* fmt, ...);
 // Called every game frame; writes the snapshot of all players once per minute of game time.
 void AILog_Tick();
 
+// Called when a game ends: writes the final summary (length, every player's state and score) and closes the file.
+void AILog_GameOver();
+
 // Resource names by engine resource id (as used by XRESRC / ResTotal).
 const char* AILog_ResName(int ResID);
 

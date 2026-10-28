@@ -57,6 +57,7 @@ extern void _wd_activate(bool on);
 
 #include "PlayerInfo.h"
 #include "NativeData.h"
+#include "AILog.h"
 #include <SDL.h>
 #include <SDL_syswm.h>
 
@@ -3083,6 +3084,7 @@ bool MPL_WaitingGame(bool Host, bool SINGLE)
 		COMPS[i]->AddLine(GetTextByID("@RMID_NORMAL"));
 		COMPS[i]->AddLine(GetTextByID("@RMID_HARD"));
 		COMPS[i]->AddLine(GetTextByID("@RMID_VERYHARD"));
+		COMPS[i]->AddLine((char*)"Insane");//kInsaneDifficulty: Very hard plus the Insane AI strategy for this player
 
 		COMPS[i]->Visible = 0;
 		COMPS[i]->Enabled = 0;
@@ -7114,7 +7116,8 @@ int processMainMenu()
 			CurrentCampagin = -1;
 			CurrentMission = -1;
 			LOADNATMASK = 0xFFFFFFFF;
-			g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
+			memset(g_InsaneNation, 0, sizeof(g_InsaneNation));
+	g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 			PrepareGameMedia(0, 0);
 			InitGame();
 			if (!SCENINF.ScenaryHandler)
@@ -7468,6 +7471,7 @@ void ProcessFranceMission()
 	CreateNationalMaskForMap(CurrentMap);
 	CurrentCampagin = -1;
 	CurrentMission = -1;
+	memset(g_InsaneNation, 0, sizeof(g_InsaneNation));
 	g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 	PrepareGameMedia(0, 0);
 	InitGame();
@@ -7564,7 +7568,8 @@ void processMLoadGame()
 		}
 		else
 		{
-			g_InsaneAI = 0;//saved games do not store the Insane AI option
+			memset(g_InsaneNation, 0, sizeof(g_InsaneNation));
+	g_InsaneAI = 0;//saved games do not store the Insane AI option
 			SFLB_LoadGame(fnames[LB->CurItem], 1);
 			HideFlags();
 			ContinueGame = true;
@@ -9401,6 +9406,9 @@ StartPlay://IMPORTANT: Main game loop
 
 	} while (!GameExit);
 
+#ifdef AILOG_ENABLED
+	AILog_GameOver();
+#endif
 	_wd_activate(false);
 	Lobby = 0;
 	PlayGameMode = 0;
@@ -12042,6 +12050,53 @@ extern "C" __declspec(dllexport) void StartAI(byte Nat, char* Name, int Land, in
 extern byte AssignTBL[8];
 extern byte PlayGameMode;
 static bool g_pilot_active = false;
+
+//Fork: [Debug] AutoPilot (see PrepareGameMedia): the local player is played by the AI for the whole game
+bool g_AutoPilot = false;
+static byte g_AutoPilotInsane = 0;//AutoPilot=2: the local player's AI uses the Insane strategy
+extern int FogMode;
+void StartAIEx(byte Nat, char* Name, int Land, int Money, int ResOnMap, int Difficulty);
+
+//Same start as the computer players get (landStyle = the map's AI style), with the hardest computer player's difficulty
+static void StartAutoPilot(byte color, int landStyle)
+{
+	int diff = 0;
+	for (int i = NPlayers; i < 8; i++)
+	{
+		if (COMPSTART[i] && PINFO[i].MapStyle > diff)
+		{
+			diff = PINFO[i].MapStyle;
+		}
+	}
+	if (diff > kVeryHardDifficulty)
+	{
+		diff = kVeryHardDifficulty;
+	}
+	if (!diff)
+	{
+		diff = 1;//no computer player: the easiest level
+	}
+	int NatID = -1;
+	for (int j = 0; j < MAXOBJECT && NatID == -1; j++)
+	{
+		OneObject* OB = Group[j];
+		if (OB && OB->NNUM == color && !OB->Sdoxlo && OB->newMons->Peasant)
+		{
+			NatID = OB->Ref.General->NatID;
+		}
+	}
+	if (NatID == -1)
+	{
+		g_AutoPilot = false;
+		return;
+	}
+	char aiName[48];
+	snprintf(aiName, sizeof aiName, "%s.%d", NatsIDS[NatID], 0);
+	StartAIEx(color, aiName, landStyle, RM_Resstart, RM_Restot, diff - 1);
+	g_pilot_active = true;//the "ai" chat cheat takes control back
+	g_InsaneNation[color] = g_AutoPilotInsane;
+	FogMode = 0;
+}
 void TogglePilot()
 {
 	if (PlayGameMode == 1 || PlayGameMode == 2) return;   // watching/running a recorded stream -> refuse (SP-play only)
@@ -12248,6 +12303,9 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 			case 4:
 				strcpy(PINFO[i].name, "Very hard");
 				break;
+			case kInsaneDifficulty:
+				strcpy(PINFO[i].name, "Insane");
+				break;
 			};
 		}
 		else
@@ -12312,6 +12370,7 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 			NATIONS[i].NMask = NMASKS[i];
 		}
 
+		g_AutoPilot = false;//set again below for random maps
 		if (MapScenaryDLL[0])
 		{
 			char ccc[128];
@@ -12338,11 +12397,17 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 		}
 		else
 		{
+			memset(g_InsaneNation, 0, sizeof(g_InsaneNation));
 			for (int i = NPlayers; i < 8; i++)
 			{
 				if (COMPSTART[i])
 				{
 					int Diff = PINFO[i].MapStyle;
+					if (Diff == kInsaneDifficulty)
+					{//Very hard plus the Insane strategy for this player only
+						g_InsaneNation[PINFO[i].ColorID] = 1;
+						Diff = kVeryHardDifficulty;
+					}
 					int c = PINFO[i].ColorID;
 					int Nat = -1;
 					for (int j = 0; j < MAXOBJECT; j++)
@@ -12363,6 +12428,17 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 					}
 				}
 			}
+#ifdef _MSC_VER
+			//Fork: [Debug] AutoPilot=1 in cossacks_native.ini: the AI plays the local player from the start
+			//(single player only: in multiplayer only this machine would run it), the fog is off to watch
+			int autoPilot = cos_ini_int("Debug", "AutoPilot", 0);//1 = normal AI, 2 = Insane AI
+			g_AutoPilot = NPlayers < 2 && autoPilot != 0;
+			g_AutoPilotInsane = autoPilot == 2;
+			if (g_AutoPilot)
+			{
+				StartAutoPilot(PINFO[myid].ColorID, RMP.STY[RM_LandType].AI_Style);
+			}
+#endif
 		}
 		memcpy(NatRefTBL, RRR, 8);
 	}
@@ -12771,6 +12847,7 @@ bool ProcessSingleMission(int n, int Diff)
 	ShowLoading();
 	strcpy(CurrentMap, MISSLIST.MISS[n].MapName);
 	CreateNationalMaskForMap(CurrentMap);
+	memset(g_InsaneNation, 0, sizeof(g_InsaneNation));
 	g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 	PrepareGameMedia(0, 0);
 	InitGame();
@@ -13488,7 +13565,8 @@ HHH1:
 			strcpy(CurrentMap, AMSP.Pack[LB->CurItem - N0].Map);
 			CreateNationalMaskForMap(CurrentMap);
 			LOADNATMASK = 0xFFFFFFFF;
-			g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
+			memset(g_InsaneNation, 0, sizeof(g_InsaneNation));
+	g_InsaneAI = 0;//missions, battles and user maps never use the Insane AI option
 			PrepareGameMedia(0, 0);
 			InitGame();
 			for (int i = 0; i < 8; i++)

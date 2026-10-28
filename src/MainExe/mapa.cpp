@@ -1240,6 +1240,7 @@ void ShowCentralText0(char* sss)
 	} while (c);
 }
 
+extern bool g_AutoPilot;//Interface.cpp: [Debug] AutoPilot
 void ShowWinner()
 {
 	static int _sw_traced = 0;
@@ -1444,7 +1445,7 @@ void ShowWinner()
 		}
 		else
 		{
-			if (!NMyUnits)
+			if (!NMyUnits && !g_AutoPilot)//Fork: under AutoPilot the game goes on while the others fight
 			{
 				LockPause = 1;
 				CmdEndGame(MyNation, 1, 113);
