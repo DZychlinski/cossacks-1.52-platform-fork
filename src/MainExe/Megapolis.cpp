@@ -1548,11 +1548,11 @@ static int AddRaiderTraining(City* city, int projectCount)
 	return projectCount;
 }
 
-//Fork: from the third 18th-century barracks on, the AI researches upgrades of its fast cavalry for the raids:
+//Fork: from the second 18th-century barracks on, the AI researches upgrades of its fast cavalry for the raids:
 //the cheapest one on offer about every kRaiderTrainPeriod game steps, if it costs at most
 //kRaiderUpgradeCostPercent of the stock. The 18th-century barracks are counted as the buildings the century
 //upgrade unlocks that train units (their names differ per nation).
-static const int kRaiderUpgradeBarracks = 3;
+static const int kRaiderUpgradeBarracks = 2;//was 3: user request (2026-10-28)
 static const int kRaiderUpgradeCostPercent = 50;
 static int g_RaiderUpgradeAt[8];
 static bool IsCenturyUpgrade(const NewUpgrade* NU);
@@ -1974,7 +1974,13 @@ bool City::FindApproximateBuildingPlace(GeneralObject* GO)
 	switch (NM->Usage)
 	{
 	case MelnicaID:
-		Res = SearchPlace(&xx, &yy, &CheckMelnica, 25);
+		Res = SearchPlace(&xx, &yy, &CheckMelnicaWide, 25);
+		if (!Res)
+		{
+			xx = CenterX;
+			yy = CenterY;
+			Res = SearchPlace(&xx, &yy, &CheckMelnica, 25);
+		}
 		break;
 	case CenterID:
 		Res = SearchPlace(&xx, &yy, &CheckStoneWoodSklad, 20);
@@ -2945,11 +2951,14 @@ static bool IsCenturyUpgrade(const NewUpgrade* NU)
 		!strncmp(NU->Name, kCenturyUpgradePrefix, strlen(kCenturyUpgradePrefix));
 }
 
-//A building that the 18th century unlocks (the 18c barracks) while the AI has none of it yet
-static bool IsFirstCenturyBuilding(City* CT, word type)
+//A building that the 18th century unlocks (the 18c barracks) while the AI has fewer than kEarlyCenturyBuildings:
+//the second one waited for the mine reserve and then never became affordable (AI log 2026-10-28 18:33, P4: one
+//18c barracks from minute 20 to 40, so its fast cavalry upgrades never started either)
+static const int kEarlyCenturyBuildings = 3;//as AI_KAZ18 in the scripts: the first 3 at full priority
+static bool IsEarlyCenturyBuilding(City* CT, word type)
 {
 	Nation* Nat = CT->Nat;
-	if (CT->UnitAmount[type] || !Nat->Mon[type]->newMons->Building)return false;
+	if (CT->UnitAmount[type] >= kEarlyCenturyBuildings || !Nat->Mon[type]->newMons->Building)return false;
 	for (int u = 0; u < Nat->NUpgrades; u++)
 	{
 		NewUpgrade* NU = Nat->UPGRADE[u];
@@ -2986,6 +2995,9 @@ static const int kFoodEmptyStock = 200;    //below this it is running out whatev
 //above this the trend is spending (upgrades, the market), not hunger: P4 stopped training soldiers at 22962
 //and 28384 food (AI log 2026-10-28 17:59)
 static const int kFoodTrendMaxStock = 10000;
+//once stopped, soldiers resume only from this stock: resuming at 200 the next spearmen ate it within 10 s, and
+//the Insane AI switched 30 times in 10 minutes with its serfs starving (AI log 2026-10-28 20:17, P6)
+static const int kFoodResumeStock = 1000;
 struct FoodTrend
 {
 	int Time;
@@ -3006,7 +3018,7 @@ static bool FoodRunningOut(City* CT)
 		memmove(F.Stock + 1, F.Stock, (kFoodTrendSamples - 1) * sizeof(int));
 		F.Stock[0] = XRESRC(CT->NI, FoodID);
 		bool was = F.Starving;
-		F.Starving = F.Stock[0] < kFoodEmptyStock;
+		F.Starving = F.Stock[0] < kFoodEmptyStock || (was && F.Stock[0] < kFoodResumeStock);
 		if (!F.Starving && F.N == kFoodTrendSamples && F.Stock[0] < kFoodTrendMaxStock)
 		{
 			int drop = F.Stock[kFoodTrendSamples - 1] - F.Stock[0];
@@ -3042,8 +3054,8 @@ static bool MineReserveBlocks(City* CT, const ProposedProject* PRP, const MinePl
 		//buildings are held back only while saving for the top gold mine: the cheap phases blocked
 		//the second barracks and Town Hall (they cost gold) and stalled production
 		if (!plan.FullGoldPhase && Nat->Mon[PRP->NIndex]->newMons->Building)return false;
-		//saving for the top gold mine takes long: the first 18c barracks may still be built meanwhile
-		if (plan.FullGoldPhase && IsFirstCenturyBuilding(CT, PRP->NIndex))return false;
+		//saving for the top gold mine takes long: the first 18c barracks may still be built meanwhile (kEarlyCenturyBuildings)
+		if (plan.FullGoldPhase && IsEarlyCenturyBuilding(CT, PRP->NIndex))return false;
 		GetUnitCost(Nat->NNUM, PRP->NIndex, cost);
 	}
 	for (int i = 0; i < 8; i++)
@@ -3124,6 +3136,48 @@ static bool CenturyReserveBlocks(City* CT, const ProposedProject* PRP, const New
 		}
 	}
 	return false;
+}
+
+//Fork: the mine and century reserves never hold back soldiers while the army is smaller than the number of
+//peasants or the base is under attack. Saving for the 18th century stopped the Russian spearmen (they cost iron)
+//for 3 minutes after a lost battle, then the mine reserve held back every soldier for 9 minutes while 130,000
+//food, 176,000 wood and 191,000 stone piled up: 17-39 soldiers against 700 (AI log 2026-10-28 20:36, P4)
+static bool BaseThreatActive(int NI);
+static bool IsSoldierProject(City* CT, const ProposedProject* PRP)
+{
+	if (PRP->PKind != 0 || PRP->NIndex >= CT->Nat->NMon)return false;
+	NewMonster* NM = CT->Nat->Mon[PRP->NIndex]->newMons;
+	return !NM->Building && !NM->Peasant;
+}
+static int CountSoldiers(City* CT)
+{
+	int n = 0;
+	int N = NtNUnits[CT->NI];
+	word* units = NatList[CT->NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (!OB || OB->Sdoxlo || OB->NewBuilding || OB->Wall)continue;
+		NewMonster* NM = OB->newMons;
+		if (!NM->Building && !NM->Peasant)n++;
+	}
+	return n;
+}
+static bool g_SoldiersFree[8];
+static bool SoldiersFreeOfReserves(City* CT)
+{
+	int soldiers = CountSoldiers(CT);
+	bool attacked = BaseThreatActive(CT->NI);
+	bool release = soldiers < CT->NPeas || attacked;
+#ifdef AILOG_ENABLED
+	if (release != g_SoldiersFree[CT->NI])
+		AILog_Event(CT->NI, release ? "RESERVE-RELEASE soldiers are no longer held back (%d soldiers, %d peasants%s)"
+			: "RESERVE-HOLD soldiers may be held back again (%d soldiers, %d peasants%s)",
+			soldiers, int(CT->NPeas), attacked ? ", base attacked" : "");
+#endif
+	g_SoldiersFree[CT->NI] = release;
+	return release;
 }
 
 //Process production queues, upgrades, farm growing etc
@@ -3241,15 +3295,17 @@ void City::ProcessCreation()
 		}
 		bool foodRunningOut = FoodRunningOut(this);
 		NewUpgrade* century = CenturyToSaveFor(Nat);
+		bool soldiersFree = (minePlan.Reserve || century) && SoldiersFreeOfReserves(this);
 		for (int k = 0; k < NPR; k++)
 		{
 			proj = BestProj[k];
 			ProposedProject* PRP = &Prop[proj];
-			if (minePlan.Reserve && MineReserveBlocks(this, PRP, minePlan))
+			bool reservesApply = !(soldiersFree && IsSoldierProject(this, PRP));
+			if (reservesApply && minePlan.Reserve && MineReserveBlocks(this, PRP, minePlan))
 			{
 				continue;
 			}
-			if (century && CenturyReserveBlocks(this, PRP, century))
+			if (reservesApply && century && CenturyReserveBlocks(this, PRP, century))
 			{
 				continue;
 			}
@@ -3368,7 +3424,8 @@ void City::ProcessCreation()
 								{
 									for (int dy = -6; dy <= 6; dy++)
 									{
-										SetUnusable(xx + ((dx + dy) >> 1), yy + ((dx - dy) >> 1), CB_Melnica | CB_Sklad | CB_Building);
+										//Fork: CB_Farm too: houses were built on the mill's field area
+										SetUnusable(xx + ((dx + dy) >> 1), yy + ((dx - dy) >> 1), CB_Melnica | CB_Sklad | CB_Building | CB_Farm);
 									};
 								};
 							};
@@ -4720,9 +4777,96 @@ static bool BaseThreatActive(int NI)
 	BaseThreat& T = g_BaseThreat[NI];
 	return T.Seen && tmtmt >= T.Time && tmtmt - T.Time < kBaseThreatSteps;
 }
+
+//Fork: an enemy army at the base, counted unit by unit: enemy soldiers within kBaseThreatBuildingCells cells of
+//a building that stands within a quarter of the map width of the Town Centre. The old check took the armies of
+//GlobalArmyInfo (neighbouring occupied cells joined together) and the corners of each one's bounding box: an
+//attack joined to the column behind it spanned half the map, its corners were nowhere near the base and
+//nobody defended (AI log 2026-10-28 18:33, P6 at 34:28: hundreds of enemies among its buildings, no BASE-THREAT)
+static const int kBaseThreatScanPeriod = 32;    //game steps between two scans of one nation
+static const int kBaseThreatCellShift = 8;      //256 px cells
+static const int kBaseThreatBuildingCells = 6;  //about 1500 px around a building
+static bool ScanBaseThreat(City* CT, int* tx, int* ty, int* count)
+{
+	Nation* Nat = CT->Nat;
+	int NI = Nat->NNUM;
+	int cx = CT->CenterX << 7;//px
+	int cy = CT->CenterY << 7;
+	int reach = (msx << 5) / kBaseThreatMapDivisor;//msx: map width in 32 px cells
+	int G = ((msx << 5) >> kBaseThreatCellShift) + 1;
+	static std::vector<byte> nearBase;
+	nearBase.assign(G * G, 0);
+	bool any = false;
+	int N = NtNUnits[NI];
+	word* units = NatList[NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (!OB || !OB->NewBuilding || OB->Sdoxlo || OB->Wall)continue;
+		int bx = OB->RealX >> 4;
+		int by = OB->RealY >> 4;
+		if (Norma(bx - cx, by - cy) > reach)continue;
+		int gx = bx >> kBaseThreatCellShift;
+		int gy = by >> kBaseThreatCellShift;
+		for (int y = gy - kBaseThreatBuildingCells; y <= gy + kBaseThreatBuildingCells; y++)
+		{
+			if (y < 0 || y >= G)continue;
+			for (int x = gx - kBaseThreatBuildingCells; x <= gx + kBaseThreatBuildingCells; x++)
+			{
+				if (x >= 0 && x < G)nearBase[x + y * G] = 1;
+			}
+		}
+		any = true;
+	}
+	if (!any)return false;
+	int n = 0;
+	long long sx = 0;
+	long long sy = 0;
+	for (int e = 0; e < 8; e++)
+	{
+		if (NATIONS[e].NMask & Nat->NMask)continue;//itself and allies
+		int NE = NtNUnits[e];
+		word* eu = NatList[e];
+		for (int i = 0; i < NE; i++)
+		{
+			if (eu[i] == 0xFFFF)continue;
+			OneObject* OB = Group[eu[i]];
+			if (!OB || OB->Sdoxlo || OB->NewBuilding || OB->Wall)continue;
+			NewMonster* NM = OB->newMons;
+			if (NM->Building || NM->Peasant)continue;
+			int x = (OB->RealX >> 4) >> kBaseThreatCellShift;
+			int y = (OB->RealY >> 4) >> kBaseThreatCellShift;
+			if (x < 0 || y < 0 || x >= G || y >= G || !nearBase[x + y * G])continue;
+			n++;
+			sx += OB->RealX >> 4;
+			sy += OB->RealY >> 4;
+		}
+	}
+	*count = n;
+	if (n < kBaseThreatMinUnits)return false;
+	*tx = int(sx / n);
+	*ty = int(sy / n);
+	return true;
+}
+//Fork: each nation's AI runs on every 8th game step only (Ddex1.cpp: tmtmt % 8 == its number), so a throttle
+//like (tmtmt + NI) % 16 never fired for most nations: the Insane AI (P6) never engaged idle soldiers nor scanned
+//for base threats. Periodic AI work keeps the time of its last run instead.
+static bool AIPeriodDue(int& last, int period)
+{
+	if (tmtmt - last >= period || tmtmt < last)//tmtmt < last: a new or loaded game
+	{
+		last = tmtmt;
+		return true;
+	}
+	return false;
+}
+static int g_EngageAt[8];
+static int g_BaseScanAt[8];
+
 void City::EngageIdleSoldiers()
 {
-	if ((tmtmt + NI) % kAIEngagePeriod)return;
+	if (!AIPeriodDue(g_EngageAt[NI], kAIEngagePeriod))return;
 	BaseThreat& T = g_BaseThreat[NI];
 	bool threat = BaseThreatActive(NI);
 	int N = NtNUnits[NI];
@@ -4735,7 +4879,19 @@ void City::EngageIdleSoldiers()
 		NewMonster* NM = OB->newMons;
 		if (NM->Building || NM->Peasant || NM->Artilery || NM->Officer || NM->Baraban || OB->Wall)continue;
 		word br = OB->BrigadeID;
-		if (br != 0xFFFF && br != Agressors.ID && br != FreeArmy.ID && br != Guards.ID && br != Defenders.ID)continue;//in an army
+		if (br != 0xFFFF && br != Agressors.ID && br != FreeArmy.ID && br != Guards.ID && br != Defenders.ID)
+		{
+			//in an army: one that stands without orders (gathering, the Insane AI's held assault) fights back
+			//too; in their brigades the soldiers never look for enemies themselves and stood still while the
+			//enemy cut them down (2026-10-28 18:33, P6 at 34:28 and 37:00). Marching or fighting: the army leads.
+			if (OB->LocalOrder)continue;
+			word close = SearchVictim(OB, 0, kAIEngageWalkingRadius);
+			if (close != 0xFFFF)OB->AttackObj(close, 128 + 16, 0);
+			else if (threat && NM->Usage != FastHorseID &&
+				Norma((OB->RealX >> 4) - (CenterX << 7), (OB->RealY >> 4) - (CenterY << 7)) <= (msx << 5) / kBaseThreatMapDivisor)
+				OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+			continue;
+		}
 		if (OB->LocalOrder)
 		{
 			if (OB->EnemyID != 0xFFFF)continue;//already fighting
@@ -7252,8 +7408,61 @@ static int CountRaiders(City* CT)
 	return n;
 }
 
+#ifdef AILOG_ENABLED
+//Once a minute: where the fast cavalry is. A game made 257 Sich Cossacks in 4 minutes and lost none, yet no
+//raid left (AI log 2026-10-28 18:33, P4)
+static void LogRaiders(City* CT)
+{
+	static int loggedAt[8];
+	int now = GetGameSeconds();
+	if (now / 60 == loggedAt[CT->NI] / 60 && now >= loggedAt[CT->NI])return;
+	loggedAt[CT->NI] = now;
+	int pool = 0, home = 0, army = 0, other = 0, loose = 0;
+	const char* armyOrder = "-";
+	const char* otherOrder = "-";
+	int N = NtNUnits[CT->NI];
+	word* units = NatList[CT->NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (!OB || OB->Sdoxlo || OB->newMons->Usage != FastHorseID)continue;
+		word br = OB->BrigadeID;
+		if (br == 0xFFFF)loose++;
+		else if (br == CT->Agressors.ID)pool++;
+		else if (br == CT->FreeArmy.ID || br == CT->Guards.ID || br == CT->Defenders.ID)home++;
+		else
+		{
+			Brigade* BR = CT->Brigs + br;
+			if (BR->ArmyID < MaxArm && CT->ARMS[BR->ArmyID].Enabled)
+			{
+				army++;
+				AI_Army* A = CT->ARMS + BR->ArmyID;
+				if (A->AOrder && A->AOrder->Message)armyOrder = A->AOrder->Message;
+			}
+			else
+			{
+				other++;
+				if (BR->BOrder && BR->BOrder->Message)otherOrder = BR->BOrder->Message;
+			}
+		}
+	}
+	int raids = 0;
+	for (int i = 0; i < MaxArm; i++)
+	{
+		AI_Army* A = CT->ARMS + i;
+		if (A->Enabled && A->AOrder && A->AOrder->ALink == &A_DiversiaLink)raids++;
+	}
+	AILog_Event(CT->NI, "RAIDERS %d waiting (raid at %d), %d in home groups, %d in armies (order %s), %d in other brigades (order %s), %d without group; %d raids out",
+		pool, RaidSize(CT), home, army, armyOrder, other, otherOrder, loose, raids);
+}
+#endif
+
 void CheckDiversants(City* CT)
 {
+#ifdef AILOG_ENABLED
+	LogRaiders(CT);
+#endif
 	int NDivers = CountRaiders(CT);
 	if (NDivers < RaidSize(CT))return;
 	int NDivArms = 0;
@@ -7374,94 +7583,25 @@ void SmartGamer(City* CT)
 	};
 	//-------------------------------------
 	if (RaidsEnabled(CT))CheckDiversants(CT);
-	if (CT->AI_TOWN_DEFENCE)
+	//Fork: the base threat is counted unit by unit (ScanBaseThreat), every kBaseThreatScanPeriod steps
+	if (CT->AI_TOWN_DEFENCE && AIPeriodDue(g_BaseScanAt[CT->NI], kBaseThreatScanPeriod))
 	{
-		//check base safety
-		Nation* Nat = CT->Nat;
-		int NNUM = Nat->NNUM;
-		int N = NtNUnits[NNUM];
-		int NArm = GNFO.EINF[NNUM]->GAINF.NArmy;
-		ArmyInfo* AIN = GNFO.EINF[NNUM]->GAINF.AINF;
-		word* units = NatList[NNUM];
-		int NDanger = 0;
-		byte UseFlags[512];
-		memset(UseFlags, 0, sizeof(UseFlags));
-		word Danger[128];
-		if (N)
+		int tx, ty, n;
+		if (ScanBaseThreat(CT, &tx, &ty, &n))
 		{
-			for (int i = 0; i < N; i++)
-			{
-				word MID = units[i];
-				if (MID != 0xFFFF)
-				{
-					OneObject* OB = Group[MID];
-					if (OB && OB->NewBuilding)
-					{
-						int xx = OB->RealX >> 12;
-						int yy = OB->RealY >> 12;
-						for (int k = 0; k < NArm; k++)
-						{
-							if (!UseFlags[k])
-							{
-								ArmyInfo* ARM = AIN + k;
-								if (Norma(ARM->MinX - xx, ARM->MinY - yy) < 10 ||
-									Norma(ARM->MinX - xx, ARM->MaxY - yy) < 10 ||
-									Norma(ARM->MaxX - xx, ARM->MinY - yy) < 10 ||
-									Norma(ARM->MaxX - xx, ARM->MaxY - yy) < 10)
-								{
-									//Fork: shooters (musketeers, archers) count too: an army of them set off no defence
-									//and from kBaseThreatMinUnits: a rush of 40 pikemen killed 52 peasants unanswered
-									if (ARM->NSword + ARM->NCaval + ARM->NMort + ARM->NStrel >= kBaseThreatMinUnits)
-									{
-										Danger[NDanger] = k;
-										NDanger++;
-										UseFlags[k] = 1;
-									};
-								};
-							};
-						};
-					};
-				};
-			};
-			if (NDanger)
-			{
-				//need to protect base;
-				CT->FreeArmy.RemoveObjects(CT->FreeArmy.NMemb, &CT->Defenders);
-				//Fork: the whole home army answers (EngageIdleSoldiers), but only to an army at the base itself:
-				//near any building counted far mines and towers, so everyone at home marched across the map
-				//into the enemy's base, which looked like joining the attack waves
-				int cx = CT->CenterX << 7;//px
-				int cy = CT->CenterY << 7;
-				int reach = (msx << 5) / kBaseThreatMapDivisor;//msx: map width in 32 px cells
-				int best = -1;
-				int bestDist = 0;
-				for (int d = 0; d < NDanger; d++)
-				{
-					ArmyInfo* TA = AIN + Danger[d];
-					int ax = ((int(TA->MinX) + int(TA->MaxX)) >> 1) << 8;//ArmyInfo: 256 px cells
-					int ay = ((int(TA->MinY) + int(TA->MaxY)) >> 1) << 8;
-					int dist = Norma(ax - cx, ay - cy);
-					if (dist <= reach && (best == -1 || dist < bestDist))
-					{
-						best = d;
-						bestDist = dist;
-					}
-				}
-				if (best != -1)
-				{
-					ArmyInfo* TA = AIN + Danger[best];
-					BaseThreat& T = g_BaseThreat[NNUM];
+			//need to protect base;
+			CT->FreeArmy.RemoveObjects(CT->FreeArmy.NMemb, &CT->Defenders);
+			BaseThreat& T = g_BaseThreat[CT->NI];
 #ifdef AILOG_ENABLED
-					if (!T.Seen || tmtmt - T.Time >= kBaseThreatSteps)
-						AILog_Event(NNUM, "BASE-THREAT %d enemies %d px from the Town Centre: the home army answers", int(TA->N), bestDist);
+			if (!T.Seen || tmtmt - T.Time >= kBaseThreatSteps)
+				AILog_Event(CT->NI, "BASE-THREAT %d enemies at the base, %d px from the Town Centre: the home army answers",
+					n, Norma(tx - (CT->CenterX << 7), ty - (CT->CenterY << 7)));
 #endif
-					T.X = ((int(TA->MinX) + int(TA->MaxX)) >> 1) << 8;
-					T.Y = ((int(TA->MinY) + int(TA->MaxY)) >> 1) << 8;
-					T.Time = tmtmt;
-					T.Seen = true;
-				}
-			};
-		};
+			T.X = tx;
+			T.Y = ty;
+			T.Time = tmtmt;
+			T.Seen = true;
+		}
 	};
 	if (rando() < 1024)
 	{

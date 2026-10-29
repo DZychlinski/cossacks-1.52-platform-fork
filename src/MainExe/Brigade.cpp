@@ -3263,6 +3263,20 @@ void Brigade_Bitva::AddEnemXY( int x, int y, int MyTop, byte mask )
 };
 word GetDir( int dx, int dy );
 void AttackObjLink( OneObject* OBJ );
+//Fork: a fighter whose target is out of its reach looks again every kBitvaRetargetPeriod steps and switches to an
+//enemy within reach. Before, only units without a target searched: in a crowd, pikemen kept pushing towards a
+//target far away while the enemy next to them went unanswered, and both armies stood and watched
+//(2026-10-28 18:33, 31:00)
+static const int kBitvaRetargetPeriod = 16;//game steps
+static const int kAIStepsPerRun = 8;//a nation's AI (and its battles) runs on every 8th step (Ddex1.cpp)
+static bool BitvaTargetOutOfReach( OneObject* OB, int MaxR )
+{
+	if ( OB->EnemyID == 0xFFFF || !MaxR )return false;
+	OneObject* EOB = Group[OB->EnemyID];
+	if ( !EOB || EOB->Sdoxlo )return false;
+	return ( Norma( OB->RealX - EOB->RealX, OB->RealY - EOB->RealY ) >> 4 ) > MaxR;
+}
+
 void B_BitvaLink( Brigade* BR )
 {
 	Brigade_Bitva* OR1 = (Brigade_Bitva*) BR->BOrder;
@@ -3370,7 +3384,11 @@ void B_BitvaLink( Brigade* BR )
 			OneObject* OB = Group[MID];
 			if ( OB&&OB->Serial == MSN[j] && !OB->newMons->Artilery )
 			{
-				if ( ( !( OB->LocalOrder ) ) || ( OB->EnemyID == 0xFFFF ) )
+				bool busy = OB->LocalOrder && OB->EnemyID != 0xFFFF;
+				bool retarget = busy && !( ( tmtmt / kAIStepsPerRun + MID ) % ( kBitvaRetargetPeriod / kAIStepsPerRun ) ) &&
+					BitvaTargetOutOfReach( OB, OB->Ref.General->MoreCharacter->MaxR_Attack );
+				if ( busy )InBattle = true;
+				if ( !busy || retarget )
 				{
 					//need to find enemy
 					NewMonster* NM = OB->newMons;
@@ -3434,8 +3452,9 @@ void B_BitvaLink( Brigade* BR )
 								};
 							};
 						};
-						if ( ReadyMID == 0xFFFF )ReadyMID = NearMID;
-						if ( ReadyMID != 0xFFFF )
+						//a retarget only takes an enemy within reach, else it keeps its target
+						if ( ReadyMID == 0xFFFF && !retarget )ReadyMID = NearMID;
+						if ( ReadyMID != 0xFFFF && !( retarget && ReadyMID == OB->EnemyID ) )
 						{
 							OB->AttackObj( ReadyMID, 128 + 8 );
 							InBattle = true;
@@ -3445,8 +3464,7 @@ void B_BitvaLink( Brigade* BR )
 
 						};
 					};
-				}
-				else InBattle = true;
+				};
 			};
 		};
 	};

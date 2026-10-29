@@ -4,10 +4,20 @@ The 2002 real-time-strategy game running in the browser via WebAssembly, with na
 for Windows, macOS and Linux and a self-contained online-multiplayer server. It preserves the full
 stability of classic 1.52 — battles of up to 40,000 units — and adds single-player cheat codes.
 
-> **About this fork.** This fork adds a native 32-bit Windows executable built with MSVC, so the
-> game runs as real x86 code with all the 1.52 fixes, without the WebAssembly/Electron layer. The
-> work is in progress; see [Fork: native Windows build](#fork-native-windows-build) for the status
-> and a log of every change made to the upstream code.
+> **About this fork.** This version mixes two repositories: the 1.52 platform edition by MR.CODERMAN
+> (WebAssembly engine, online multiplayer, desktop clients) and the native Windows code paths of Ildar's
+> "The Last Stand" port. The emphasis is on a native 32-bit Windows desktop client built with MSVC, for
+> performance: the game runs as real x86 code with all the 1.52 fixes, without the WebAssembly/Electron
+> layer. The web edition is left as it was, for anyone who wants that version.
+>
+> - **Much stronger computer players.** The AI has been significantly improved: economy, mines,
+>   storehouses, towers, base defence, raids, battles and the market (see [AI changes](#ai-changes)).
+> - **Not compatible** with any other version available on GitHub (upstream, The Last Stand or other
+>   forks): lobbies, recordings and saved games do not mix.
+> - **Mods** are loose data files in `mods\<name>\`, switched on in `cossacks_native.ini` (see [Mods](#mods)).
+>
+> See [Fork: native Windows build](#fork-native-windows-build) for building, settings and a log of every
+> change made to the upstream code.
 
 ---
 
@@ -153,7 +163,7 @@ cmake --build out/build/win32-release --config Release
 
 The `.sln` files are not used: they target the VS 2015/2019 toolsets and do not include `platform/`.
 
-**Status:** `dmcr.exe` builds and links. It has not been tested in play yet.
+**Status:** `dmcr.exe` builds and is played regularly (single player and AI vs AI).
 
 ## Running
 
@@ -213,7 +223,9 @@ file (default `en`); files missing from that language fall back to `en`, as in t
 next to the exe, so the exe folder must be writable. Files there also take precedence over the data
 folder.
 
-**Mods.** A mod is a folder `mods\<name>\` next to the exe with changed data files at the same paths as
+### Mods
+
+A mod is a folder `mods\<name>\` next to the exe with changed data files at the same paths as
 in `data\en\` (loose files, no gsc archive). Activate mods in `cossacks_native.ini`:
 
 ```ini
@@ -227,7 +239,12 @@ listed too. A listed folder that does not exist is reported at start and skipped
 player must have the same active mods (same names, files and contents): otherwise the host cannot start
 and the other players cannot press Ready.
 
-**Fullscreen.** The game runs in a borderless window covering the screen from the start, menu and game
+A mod file replaces the whole original file. Mods can change units and buildings and add new upgrades to
+the nation files (`*.NDS`); computer players research the new upgrades as they do the original ones.
+
+### Fullscreen
+
+The game runs in a borderless window covering the screen from the start, menu and game
 alike, so the monitor never switches resolution. The menu (1024x768) and the game resolution are scaled
 to the screen; choose the screen's own resolution in the options for a 1:1 picture. For the old
 behaviour (windowed menu, exclusive fullscreen game) set:
@@ -237,7 +254,9 @@ behaviour (windowed menu, exclusive fullscreen game) set:
 Fullscreen=0
 ```
 
-**AI test games.** Set this in `cossacks_native.ini` to let the AI play your own nation in single player
+### AI test games
+
+Set this in `cossacks_native.ini` to let the AI play your own nation in single player
 games, so computer players can fight each other while you watch:
 
 ```ini
@@ -248,6 +267,55 @@ AutoPilot=1
 `AutoPilot=2` does the same with the Insane AI strategy. The AI takes over from the first second with the hardest computer player's difficulty (at most Very hard), the fog of war
 is off, and the game goes on after your nation is defeated. The `ai` chat cheat takes control back.
 The AI log marks the game `# AUTOPILOT on`. Random maps only; ignored in multiplayer.
+
+## Settings: cossacks_native.ini
+
+`cossacks_native.ini` sits next to `dmcr.exe`; the exe creates it on first run (data folder choice) and
+reads it at start. Every key is optional.
+
+| Section | Key | Default | Meaning |
+|---|---|---|---|
+| `[Data]` | `DataDir` | `data\` next to the exe, else a folder dialog | Folder holding the game data (the one containing `en\`) |
+| `[Data]` | `Language` | `en` | Data language folder; files missing there fall back to `en` |
+| `[Mods]` | `Active` | none | Comma-separated mod folders from `mods\`, first wins (see [Mods](#mods)) |
+| `[Display]` | `Fullscreen` | `1` | `1` borderless window covering the screen; `0` the old windowed menu and exclusive fullscreen game |
+| `[Debug]` | `AutoPilot` | `0` | `1` the AI plays your own nation (normal AI), `2` the same with the Insane strategy |
+
+Example:
+
+```ini
+[Data]
+DataDir=E:\Games\Cossacks152\data
+[Mods]
+Active=batch1
+[Debug]
+AutoPilot=1
+```
+
+### Watching an AI vs AI game
+
+1. Set `[Debug] AutoPilot=1` (or `2` for the Insane strategy) in `cossacks_native.ini`.
+2. Start a single player random map game with one or more computer players and pick their difficulty
+   in the lobby (e.g. "Very hard" or "Insane (experimental)").
+3. From the first second the AI plays your nation with the hardest computer player's difficulty (at
+   most Very hard). The fog of war is off and the game goes on after your nation is defeated; type `ai`
+   in the chat to take control back.
+
+Every game writes an AI log to `ai_logs\ai_<date>-<time>.log` next to the exe (resources, workers,
+buildings, units made and lost, base threats, raids, ...), useful to see what each computer player did.
+
+## Computer players (AI)
+
+- **Significantly improved.** The nation AI is rebuilt from its source and its engine side reworked:
+  it gathers and trades sensibly, staffs and upgrades its mines, reaches the 18th century, builds towers
+  on high ground outside its base, defends its base with its whole army, sends fast cavalry raids and
+  keeps fighting in battle instead of stopping. The full list is under [AI changes](#ai-changes).
+- **Very hard is the most challenging opponent.** For the hardest game, play against Very hard: it
+  easily reaches 4,000 population.
+- **Insane (experimental).** A sixth difficulty, "Insane (experimental)", per computer slot or for all
+  computer players. Its strategy (economy upgrades first, mass pikemen and dragoons, one big combined
+  assault) is ported from Emile's Cossacks remix. It is experimental: in AI vs AI games it currently loses
+  against Very hard.
 
 ## Nation AI sources
 
@@ -378,7 +446,7 @@ later. Add a line there for every change players can notice.
 | Insane AI for single computer players: the lobby difficulty list of each computer slot has a sixth entry, "Insane (experimental)" (the global option reads "Insane AI (experimental)") = Very hard plus the Insane strategy for that player only (`kInsaneDifficulty` in `MapDiscr.h`, packed in the slot's existing 3 difficulty bits, so lobbies and recordings need no new fields; `g_InsaneNation` in `Ddex1.cpp`, `IsInsaneAI` in `Megapolis.cpp`); the global Insane option still applies to all computer players; the AI log header marks Insane players `insane=yes` | Normal and Insane computer players can be compared in the same game. |
 | Insane AI attack hold waits for 48 dragoons only once dragoons can be trained, and attacks anyway once 300 soldiers wait (`SmartGamer`, `Megapolis.cpp`) | Nations whose only dragoons are 18th-century ones never attacked before the 18th century; dragoons that kept dying held the army at home for good. |
 | AI storehouses (`SearchSkladPlace` in `NewAI.cpp`, `FindSkladPlace` in `Megapolis.cpp`): the free spot within 30 cells (3,840 px) at the edge of a forest or stone field (unserved wood or stone within 2 cells) with the most wood and stone within 5 cells, nearer cells weighing more, that no storehouse or Town Centre of the player serves yet (within 6 cells), less its distance; a resource without a storehouse of its own is searched first (wood, then stone), and within 12 cells of the start point before the whole 30 (`kSkladNearRadius`; a big forest far away beat a small one by the Town Centre); the original search is the fallback | The original search took the first spot next to any tree or stone on a spiral from the Town Centre, so new storehouses went next to the old ones or wherever there was room. Without the edge rule a spot halfway between two forests won because it reached both. |
-| AI raids (`CheckDiversants`, `AddRaiderTraining`, `RaidSize` in `Megapolis.cpp`): about once a second, while the next raid lacks riders, the AI trains the cheapest fast rider it can (before minute 20 only every 10 s, `kRaiderEarlySec`) (Usage `FASTHORSE`: hussars, Croats, winged hussars, Sich Cossacks, also the Diplomatic Centre's mercenary ones) if it costs at most 20% of the stock; fast cavalry no longer joins the main armies, also not the armies formed while defending (at home it still fights) and leaves as a raid at 100 riders, from minute 30 at a random 150–300 per raid, at most 2 raids at once (before: 5–15 riders, at most 6 raids a game); the AI log writes `RAID` when one leaves; from the third 18th-century barracks the AI also researches upgrades of its fast cavalry, the cheapest on offer about once a second if it costs at most 50% of the stock (`AddRaiderUpgrades`; the 18th-century barracks are the buildings the century upgrade unlocks that train units) | No nation script trained fast cavalry, so the raids (peasants, mines, small groups, avoiding larger armies) hardly ever happened. |
+| AI raids (`CheckDiversants`, `AddRaiderTraining`, `RaidSize` in `Megapolis.cpp`): about once a second, while the next raid lacks riders, the AI trains the cheapest fast rider it can (before minute 20 only every 10 s, `kRaiderEarlySec`) (Usage `FASTHORSE`: hussars, Croats, winged hussars, Sich Cossacks, also the Diplomatic Centre's mercenary ones) if it costs at most 20% of the stock; fast cavalry no longer joins the main armies, also not the armies formed while defending (at home it still fights) and leaves as a raid at 100 riders, from minute 30 at a random 150–300 per raid, at most 2 raids at once (before: 5–15 riders, at most 6 raids a game); the AI log writes `RAID` when one leaves; from the second 18th-century barracks the AI also researches upgrades of its fast cavalry, the cheapest on offer about once a second if it costs at most 50% of the stock (`AddRaiderUpgrades`; the 18th-century barracks are the buildings the century upgrade unlocks that train units) | No nation script trained fast cavalry, so the raids (peasants, mines, small groups, avoiding larger armies) hardly ever happened. |
 | AI armies of more than 200 soldiers (or force above 3,800) no longer halt, re-form or pull back in front of positions covered by towers or guns (`ArmyMakeBattleLink`, `Megapolis.cpp`); smaller armies still wait there and for other armies to join | Soldiers cannot damage towers, so a large army stood for minutes in front of one tower while only its mortars fired. |
 | AI players train no soldiers while their food would run out within 60 s at the trend of the last 30–40 s, or is below 200 (`FoodRunningOut`, `Megapolis.cpp`; peasants still trained; AI log `FOOD-LOW` / `FOOD-OK`); Insane AI researches food gathering upgrades first, with wood and stone, while at least 1,500 food would be left (`GetInsaneUpgradePriority`; bought with the starting food it starved 8 of its 18 peasants) | Units die without food: the Insane AI kept training pikemen until its food ran out, and its peasants and pikemen starved. |
 | Once 150 peasants work in its gold mines, an AI sells wood and stone for gold only above 600,000 of each (`ForkLimitAISale` in `Megapolis.cpp`, called from `AI_Torg` in `ActiveScenary.cpp`) | The scripts sold everything above 200,000 for gold at about 10:1 late in the game and never kept enough for Town Centres (the most expensive European one costs about 510,000), Stables or barracks. |
@@ -392,6 +460,18 @@ later. Add a line there for every change players can notice.
 | AI saves gold and iron for the 18th century: once the century can be researched, soldiers and other upgrades may not spend the gold and iron it costs (`CenturyToSaveFor`, `CenturyReserveBlocks`, `kCenturyReserveRes` in `Megapolis.cpp`; buildings and peasants exempt; the AI log writes `CENTURY-SAVE`) | Mercenaries spent each bit of gold as it came in: the AI had plenty of food but never saved the gold for the 18th century and stayed in the 17th. |
 | AI food watch ignores the trend above 10,000 food (`kFoodTrendMaxStock`) | A fast drop at that stock is spending, not hunger: it stopped soldiers while the AI still had plenty of food. |
 | AI raids, rider training for them and keeping fast cavalry out of the armies share one rule, `RaidsEnabled` (`Megapolis.cpp`): above the easiest difficulty, as the original raids; the AI log SNAP line shows the difficulty | On the easiest level the AI trained riders for raids that never left, and they sat at home. |
+| AI base threat counted unit by unit (`ScanBaseThreat`, `Megapolis.cpp`): every 32 steps, enemy soldiers within about 1,500 px of an AI building that stands within a quarter of the map width of its Town Centre; 15 or more set `g_BaseThreat` at their average position | The army check used the corners of whole enemy armies (`GlobalArmyInfo`): an attack joined to the column behind it spanned half the map, so hundreds of enemies among the buildings set off no defence. |
+| AI army soldiers standing without orders (gathering, the Insane AI's held assault) attack enemies within 600 px, and while the base is attacked those at home march to the threat (`City::EngageIdleSoldiers`) | In their brigades soldiers never look for enemies themselves: the Insane AI's held armies stood still while its base was taken. |
+| AI fighters in battle look again every 16 steps when their target is out of reach and switch to an enemy within reach (`B_BitvaLink`, `kBitvaRetargetPeriod`, `Brigade.cpp`) | Only units without a target searched: in a crowd, pikemen kept pushing towards a far target while the enemy next to them went unanswered, and both armies stood and watched. |
+| The mine-upgrade gold reserve lets the first three 18th-century barracks through, not only the first (`kEarlyCenturyBuildings`) | The second waited for the reserve and then never became affordable: the AI stayed with one 18c barracks for a long time, so the fast cavalry upgrades (from the third) never started. |
+| AI log `RAIDERS` once a minute: fast cavalry waiting for a raid, in home groups, in armies and other brigades (with their order), without group, and raids out | The AI kept training Sich Cossacks and lost none, yet no raid left; this shows where they are. |
+| AI periodic work keeps the time of its last run (`AIPeriodDue`: idle soldiers, base threat scan; battle re-target per AI run) | Each nation's AI runs on every 8th step only (`tmtmt % 8` = its number), so throttles like `(tmtmt + NI) % 16` never fired for most nations: the Insane AI never engaged idle soldiers nor saw a base threat. |
+| AI mills look for 7x7 free cells first (`CheckMelnicaWide`, then the old 5x5 `CheckMelnica`), and houses are no longer built on a new mill's field area (`CB_Farm`) | A house beside a mill left room for half its fields. |
+| AI towers take the highest of the valid places within 4 rings of the first one found (`SearchTowerPlace`, `kTowerHighGroundRings`, `GetHeight`) | Towers see and shoot further from a hill. |
+| AI fast cavalry upgrades from the second 18th-century barracks (`kRaiderUpgradeBarracks`, was the third) | User request. |
+| AI market shortage trades: food or wood below 500 is bought with stone (keeping 3,000) or gold (keeping 12,000), 1,000 per call; a stone or wood surplus above 50,000 buys gold while gold is below 30,000, 5,000 per call (`Market()`, `AI_SHORTAGE_*`, `AI_SURPLUS_*` in `src/AI/Extraction.h`) | The market only traded at 200,000+: the AI ran out of food and wood with stone and gold unused, and saving gold for mine upgrades took minutes while stone piled up. |
+| AI food watch resumes soldiers only from 1,000 food (`kFoodResumeStock`) | Resuming at 200, the next soldiers ate it within seconds: the AI kept switching back and forth while its serfs starved. |
+| The mine and 18th-century reserves never hold back soldiers while the army is smaller than the number of peasants or the base is under attack (`SoldiersFreeOfReserves`; the AI log writes `RESERVE-RELEASE` and `RESERVE-HOLD`) | Saving iron for the century stopped soldier training for minutes after a lost battle, then the mine reserve held back every soldier, leaving a handful of soldiers against a large army. |
 | AI builds up to 6 Artillery Depots in the late stages (`AI_ARTDEPO_MAX` in `src/AI/Extraction.h`, used by `Extraction.h` and the nation scripts in `Scripts.h`; was 3) | User request: more artillery for the late game. |
 | AI soldiers waiting at home attack the nearest enemy within 1,200 px, checked every 16 game steps (`City::EngageIdleSoldiers`, `Megapolis.cpp`; units marching in an army, artillery, officers and drummers are left alone) | On their own they only searched their short radius, so an army shooting the base from further away, or standing next to a building that trains units, met no resistance. |
 | AI mine capture (`TakeNewMineBrain`, `Megapolis.cpp`): distance at least the map width (before: `MINE_CAPTURE_RADIUS`, about 250 cells); the AI's mines are counted by the resource they produce (`CountMinesByRes`; the `UID_MINE` offsets did not match); with 2 gold and 1 iron mine but no coal mine the next one is coal (`kMinGoldBeforeCoal`, `kMinIronBeforeCoal`) | Mines are spawned at every possible starting position, also unused ones; the AI now takes those too, nearest safe mine first. The scripts' capture tables never ask for coal, so the AI had none. |

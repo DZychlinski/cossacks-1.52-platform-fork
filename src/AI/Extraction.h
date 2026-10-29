@@ -10,6 +10,19 @@
 #define AI_STOREHOUSE_PERIOD_SEC         300  // and one more Storehouse every 5 minutes of game time after that (they stopped at 4)
 #define AI_CHURCHES_MAX                  5    // one church per Town Centre, at most this many
 #define AI_ARTDEPO_MAX                   6    // artillery depots in the late stages (was 3)
+// Market: food or wood below AI_SHORTAGE_STOCK is bought with stone or gold above their reserves. The market
+// only traded at 200,000+; the Insane AI sat at 0 food and 0 wood for minutes with 11,000 stone and 5,000 gold
+// unused, and its peasants starved (AI log 2026-10-28 20:17, P6)
+#define AI_SHORTAGE_STOCK                500
+#define AI_SHORTAGE_SELL                 1000   // sold per call
+#define AI_SHORTAGE_KEEP_STONE           3000
+#define AI_SHORTAGE_KEEP_GOLD            12000  // above the 18th century's 9,800 gold
+// Market: a surplus of stone or wood above AI_SURPLUS_STOCK buys gold while gold is below AI_SURPLUS_GOLD_WANTED.
+// Saving gold for mine upgrades took 9 minutes while 176,000 wood and 191,000 stone piled up (AI log
+// 2026-10-28 20:36, P4); stone and wood were sold for gold only above 200,000
+#define AI_SURPLUS_STOCK                 50000
+#define AI_SURPLUS_SELL                  5000   // sold per call
+#define AI_SURPLUS_GOLD_WANTED           30000
 #define AI_EXTRA_CHURCHES_COST_PERCENT   60   // churches after the first (each gives population)
 #define AI_EXTRA_MILLS_COST_PERCENT      60   // one Mill per Town Centre: mills after the first two
 #define AI_PEASANTS_FIRST                60   // below this many peasants they may cost up to AI_PEASANTS_FIRST_COST_PERCENT of the stock (else 20)
@@ -538,6 +551,21 @@ void Market(){
 				AI_Torg(IronID, StoneID, 600);
 			};
 			SetAIRegister(AIR_StartCoal+AiNat, 1);
+		};
+		// Fork: surplus to gold (AI_SURPLUS_STOCK)
+		if(GetMoney(GoldID)<AI_SURPLUS_GOLD_WANTED){
+			if(GetMoney(StoneID)>=GetMoney(WoodID)){
+				if(GetMoney(StoneID)>AI_SURPLUS_STOCK+AI_SURPLUS_SELL) AI_Torg(StoneID, GoldID, AI_SURPLUS_SELL);
+			}else if(GetMoney(WoodID)>AI_SURPLUS_STOCK+AI_SURPLUS_SELL) AI_Torg(WoodID, GoldID, AI_SURPLUS_SELL);
+		};
+		// Fork: shortage trades (AI_SHORTAGE_STOCK)
+		if(GetMoney(FoodID)<AI_SHORTAGE_STOCK){
+			if(GetMoney(StoneID)>AI_SHORTAGE_KEEP_STONE+AI_SHORTAGE_SELL) AI_Torg(StoneID, FoodID, AI_SHORTAGE_SELL);
+			else if(GetMoney(GoldID)>AI_SHORTAGE_KEEP_GOLD+AI_SHORTAGE_SELL) AI_Torg(GoldID, FoodID, AI_SHORTAGE_SELL);
+		};
+		if(GetMoney(WoodID)<AI_SHORTAGE_STOCK){
+			if(GetMoney(StoneID)>AI_SHORTAGE_KEEP_STONE+AI_SHORTAGE_SELL) AI_Torg(StoneID, WoodID, AI_SHORTAGE_SELL);
+			else if(GetMoney(GoldID)>AI_SHORTAGE_KEEP_GOLD+AI_SHORTAGE_SELL) AI_Torg(GoldID, WoodID, AI_SHORTAGE_SELL);
 		};
 		// PrepareUpgrade(&AKASTN2)
 		if(UpgIsRun(&AKAWOOD) && !UpgIsRun(&AKASTN2) && GetReadyUnits(&AKADEMIA)){			

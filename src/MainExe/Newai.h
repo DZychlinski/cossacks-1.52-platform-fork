@@ -25,6 +25,7 @@ void CreateInfoMap();
 void RenewInfoMap(int x,int y);
 typedef bool SearchFunction(int xx,int yy);
 bool CheckMelnica(int x,int y);
+bool CheckMelnicaWide(int x,int y);
 bool CheckStoneSklad(int x,int y);
 bool CheckWoodSklad(int x,int y);
 bool CheckStoneWoodSklad(int x,int y);

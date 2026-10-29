@@ -40,3 +40,12 @@ Computer players build up to 6 Artillery Depots.
 Computer players see enemy armies again: they defend their base and their armies and raids avoid stronger enemies.
 Computer players save gold for the 18th century instead of spending it all on mercenaries.
 Computer players on the easiest level send fast cavalry with their armies instead of keeping it home for raids.
+Computer players notice an attack on their base however the attacking army is spread out.
+Computer armies waiting at home fight back when attacked.
+Computer soldiers in battle turn to the enemy next to them instead of pushing towards a far target.
+Computer players build their second and third 18th-century barracks sooner.
+Computer players defend with all their soldiers: the Insane AI's defence never ran before.
+Computer players leave room around their mills for the fields.
+Computer players build towers on high ground when they can.
+Computer players trade surplus stone and gold for food and wood when they run short, and surplus stone and wood for gold.
+Computer players keep training soldiers while their army is small or their base is attacked, even when saving for an upgrade.

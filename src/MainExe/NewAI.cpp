@@ -195,22 +195,33 @@ void FreeInfoMap()
 int SsMaxX;
 int SsMaxY;
 #define FieldSX 2
-bool CheckMelnica(int x, int y)
+//Fork: free cells (128 px) around a mill; the wide check is tried first so that its fields are not hemmed in
+//by houses and other buildings (a house beside a mill left room for half its fields)
+static const int kMillWideFieldCells = 3;
+static bool CheckMelnicaR(int x, int y, int R)
 {
-	if (x <= FieldSX || y <= FieldSX || x >= SsMaxX - FieldSX || y >= SsMaxY - FieldSX)return false;
+	if (x <= R || y <= R || x >= SsMaxX - R || y >= SsMaxY - R)return false;
 	int ofst = x + y * VAL_SPRNX;
 	if (CantBuild[ofst] & CB_Melnica)return false;
-	ofst -= FieldSX + VAL_SPRNX * FieldSX;
-	for (int dy = -FieldSX; dy <= FieldSX; dy++)
+	ofst -= R + VAL_SPRNX * R;
+	for (int dy = -R; dy <= R; dy++)
 	{
-		for (int dx = -FieldSX; dx <= FieldSX; dx++)
+		for (int dx = -R; dx <= R; dx++)
 		{
 			if (!(InfoMap[ofst] & 4))return false;
 			ofst++;
 		};
-		ofst += VAL_SPRNX - FieldSX - FieldSX - 1;
+		ofst += VAL_SPRNX - R - R - 1;
 	};
 	return true;
+};
+bool CheckMelnica(int x, int y)
+{
+	return CheckMelnicaR(x, y, FieldSX);
+};
+bool CheckMelnicaWide(int x, int y)
+{
+	return CheckMelnicaR(x, y, kMillWideFieldCells);
 };
 bool CheckStoneSklad(int x, int y)
 {
@@ -485,6 +496,10 @@ bool SearchSkladPlace(int* xx1, int* yy1, int r, const int* depX, const int* dep
 //side), then any side. Before: the Town Centre's own spot first, from the second tower on the first free spot
 //anywhere near the Town Centre, and the "enemy" was player 0 only (else the map corner): towers clumped inside
 //the base and their fire hit its own buildings.
+//Fork: of the valid tower places in kTowerHighGroundRings rings from the first one found, the highest one
+//(towers see and shoot further from a hill)
+static const int kTowerHighGroundRings = 4;//128 px cells
+int GetHeight(int x, int y);
 bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, int xc, int yc, int xe, int ye, bool toEnemy)
 {
 	SsMaxX = msx >> 2;
@@ -498,7 +513,11 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, 
 	for (int pass = toEnemy ? 0 : 1; pass < 2; pass++)
 	{
 	int PrevTopDst = 0;
-	for (int i = rMin; i < r; i++)
+	int bestX = -1;
+	int bestY = -1;
+	int bestH = 0;
+	int bandEnd = r;
+	for (int i = rMin; i < r && i < bandEnd; i++)
 	{
 		char* xi = Rarr[i].xi;
 		char* yi = Rarr[i].yi;
@@ -520,9 +539,14 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, 
 							if (TDST > PrevTopDst)PrevTopDst = TDST;
 							if (SFN(xx, yy))
 							{
-								*xx1 = xx;
-								*yy1 = yy;
-								return true;
+								int h = GetHeight((xx << 7) + 64, (yy << 7) + 64);
+								if (bestX == -1)bandEnd = i + kTowerHighGroundRings;
+								if (bestX == -1 || h > bestH)
+								{
+									bestX = xx;
+									bestY = yy;
+									bestH = h;
+								}
 							};
 						};
 					};
@@ -530,6 +554,12 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, 
 			};
 		};
 	};
+	if (bestX != -1)
+	{
+		*xx1 = bestX;
+		*yy1 = bestY;
+		return true;
+	}
 	}
 	return false;
 };
