@@ -14,7 +14,7 @@ Computer players keep enough peasants on food for their whole population and tra
 Each computer player can be set to "Insane" in the game setup (Very hard plus the Insane AI strategy for that player only).
 Computer players defend their base: soldiers waiting at home attack enemies nearby instead of standing still.
 Insane AI attacks once 300 soldiers wait, even without enough dragoons.
-Computer players keep upgrading all their mines after the first plan, lowest level first, whenever they can afford it; far mines only to level 4.
+Computer players keep upgrading all their mines after the first plan, lowest level first, whenever they can afford it; far mines only to level 2.
 In the 18th century, with more than 200,000 food, computer players send half of their food peasants to wood and stone.
 Computer players with resources to spare build more Town Centres and Stables.
 Computer players always keep at least a quarter of their peasants on wood and stone, both of them.
@@ -52,7 +52,11 @@ Computer players keep training soldiers while their army is small or their base 
 Computer players build towers again (none were built in long games).
 Computer raids come home after 5 minutes, fast cavalry stays out of the main armies, and fast cavalry and artillery help defend the base.
 Computer players train grenadiers late in the game and send small squads to destroy enemy mines.
-Computer players take mines across the whole map late in the game and keep more peasants on wood and stone.
+Computer players take mines across the whole map from their fourth Town Centre and keep more peasants on wood and stone late in the game.
 Computer armies march with fewer pauses.
 Computer players save for more 18th-century barracks instead of building ever more 17th-century ones, and build more stables late in the game.
 Computer armies fight back late in long games (with more than about 8,000 units and buildings on the map they stood still next to the enemy).
+Computer players build extra Town Centres only after their barracks and Stables.
+Computer raids look for targets across the whole map instead of waiting in the base, and keep riding to them.
+Computer players build up to 20 towers in the 18th century, more slowly after the 10th.
+Computer raids follow the capture option: without capture they hunt peasants instead of standing next to buildings.

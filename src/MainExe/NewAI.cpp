@@ -511,8 +511,7 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, 
 	if (MyTop >= 0xFFFE)return false;
 	MyTop *= NAreas;
 	//Fork: the path-distance check (TDST - PrevTopDst < 14) grew from 0 at the centre in SearchPlace; starting at
-	//ring rMin every place was already further and none was accepted: no tower in a 93-minute game (AI log
-	//2026-10-29 07:18). It starts from the nearest place of the first ring instead.
+	//ring rMin every place was already further and none was accepted, so no tower was ever built. It starts from the nearest place of the first ring instead.
 	int StartTopDst = -1;
 	if (rMin < RRad)
 	{

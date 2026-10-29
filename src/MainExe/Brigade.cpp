@@ -3279,7 +3279,6 @@ void AttackObjLink( OneObject* OBJ );
 //Fork: a fighter whose target is out of its reach looks again every kBitvaRetargetPeriod steps and switches to an
 //enemy within reach. Before, only units without a target searched: in a crowd, pikemen kept pushing towards a
 //target far away while the enemy next to them went unanswered, and both armies stood and watched
-//(2026-10-28 18:33, 31:00)
 static const int kBitvaRetargetPeriod = 16;//game steps
 static const int kAIStepsPerRun = 8;//a nation's AI (and its battles) runs on every 8th step (Ddex1.cpp)
 static bool BitvaTargetOutOfReach( OneObject* OB, int MaxR )

@@ -4,9 +4,9 @@
 #define AI_OPTIONAL_CENTERS_COST_PERCENT 75
 #define AI_KAZ18_MAX                     1000 // 18c barracks: no practical count limit beyond the first 3
 #define AI_KAZ18_COST_PERCENT            90   // 18c barracks are the AI's key military building
-#define AI_KAZ18_RICH_FROM               5    // from this many 18c barracks on: up to AI_KAZ18_RICH_COST_PERCENT (user request)
+#define AI_KAZ18_RICH_FROM               5    // from this many 18c barracks on: up to AI_KAZ18_RICH_COST_PERCENT
 #define AI_KAZ18_RICH_COST_PERCENT       95
-#define AI_PEASANTS_MAX                  2500 // was 1500: 1,260 in the mines left 245 for wood, stone and food
+#define AI_PEASANTS_MAX                  2500 // mines take most peasants late in the game; wood, stone and food need the rest
 #define AI_XVIII_COST_PERCENT            98   // unchanged value, but now proposed first (top of Buildings)
 #define AI_OPTIONAL_STOREHOUSES          4    // Storehouses 2..4 next to the optional Town Centres
 #define AI_OPTIONAL_STOREHOUSES_COST_PERCENT 50
@@ -14,15 +14,15 @@
 #define AI_CHURCHES_MAX                  5    // one church per Town Centre, at most this many
 #define AI_ARTDEPO_MAX                   6    // artillery depots in the late stages (was 3)
 // Market: food or wood below AI_SHORTAGE_STOCK is bought with stone or gold above their reserves. The market
-// only traded at 200,000+; the Insane AI sat at 0 food and 0 wood for minutes with 11,000 stone and 5,000 gold
-// unused, and its peasants starved (AI log 2026-10-28 20:17, P6)
+// only traded at 200,000+; an AI could sit at 0 food and 0 wood for minutes with stone and gold
+// unused while its peasants starved
 #define AI_SHORTAGE_STOCK                500
 #define AI_SHORTAGE_SELL                 1000   // sold per call
 #define AI_SHORTAGE_KEEP_STONE           3000
 #define AI_SHORTAGE_KEEP_GOLD            12000  // above the 18th century's 9,800 gold
 // Market: a surplus of stone or wood above AI_SURPLUS_STOCK buys gold while gold is below AI_SURPLUS_GOLD_WANTED.
-// Saving gold for mine upgrades took 9 minutes while 176,000 wood and 191,000 stone piled up (AI log
-// 2026-10-28 20:36, P4); stone and wood were sold for gold only above 200,000
+// Otherwise saving gold for mine upgrades takes minutes while wood and stone pile up; the scripts sold stone and
+// wood for gold only above 200,000
 #define AI_SURPLUS_STOCK                 50000
 #define AI_SURPLUS_SELL                  5000   // sold per call
 #define AI_SURPLUS_GOLD_WANTED           30000
@@ -34,9 +34,12 @@
 #define AI_RICH_MAX                      1000 // a rich AI builds more Town Centres and Stables than the fixed counts below,
 #define AI_RICH_COST_PERCENT             20   // one more whenever it costs at most this share of the stockpile
 #define AI_LATE_KAZ17_FROM               6    // from this many 17c barracks on, one more only out of surplus: they cost 300k gold each
-#define AI_LATE_KAZ17_COST_PERCENT       20   // and took the gold the next 18c barracks needed (25 of them, user report 2026-10-29)
+#define AI_LATE_KAZ17_COST_PERCENT       20   // and took the gold the next 18c barracks needed
 #define AI_LATE_STABLE_FROM_KAZ18        6    // with this many 18c barracks more Stables may cost up to AI_LATE_STABLE_COST_PERCENT:
-#define AI_LATE_STABLE_COST_PERCENT      50   // the 7th costs 224k wood, at 20% it never came before the 17c barracks (user request)
+#define AI_LATE_STABLE_COST_PERCENT      50   // the 7th costs 224k wood, at 20% it never came before the 17c barracks
+#define AI_TOWERS_18C                    10   // towers in the 18th century at the usual pace
+#define AI_TOWERS_MAX                    20   // then one more every AI_TOWERS_SLOW_PERIOD_SEC up to this many: each costs only
+#define AI_TOWERS_SLOW_PERIOD_SEC        180  // 20% more than the previous, so the cost alone would not slow them
 // Fork: one church per Town Centre (at least 1), at most AI_CHURCHES_MAX
 int ChurchTarget(){
 	int n = GetUnits(&CENTER);
@@ -394,8 +397,9 @@ void Buildings(){
 
 	TryUnit(&STABLE, 3, 100, 100);
 	// Fork: with resources to spare, no fixed limit (they stopped at 5-6 with millions in stock)
-	TryUnit(&CENTER, AI_RICH_MAX, AI_RICH_COST_PERCENT, 100);
 	TryUnit(&STABLE, AI_RICH_MAX, GetUnits(&KAZ18)>=AI_LATE_STABLE_FROM_KAZ18 ? AI_LATE_STABLE_COST_PERCENT : AI_RICH_COST_PERCENT, 100);
+	// after the Stables (and the 18c barracks above), so it does not take their wood and stone
+	TryUnit(&CENTER, AI_RICH_MAX, AI_RICH_COST_PERCENT, 100);
 //	if(GetUnits(&KAZ18))
 
 //	if(UpgIsDone(&AKASBUIL))
@@ -777,6 +781,20 @@ void Cannons(){
 	}
 };
 
+// Fork: past AI_TOWERS_18C one tower per AI_TOWERS_SLOW_PERIOD_SEC (counted from the last new one; not saved, so
+// after loading a game the next one may come at once)
+int TowerCount[8];
+int TowerNextSec[8];
+void TrySlowTower(){
+	int n = GetUnits(&TOWER);
+	if(n != TowerCount[AiNat]){
+		TowerCount[AiNat] = n;
+		TowerNextSec[AiNat] = GetGameSeconds() + AI_TOWERS_SLOW_PERIOD_SEC;
+	};
+	if(n < AI_TOWERS_18C || n >= AI_TOWERS_MAX || GetGameSeconds() < TowerNextSec[AiNat]) return;
+	TryUnit(&TOWER, n+1, 50, 100);
+};
+
 void Towers(){
 	if(GetUnits(&TOWER)-GetReadyUnits(&TOWER) +
 		GetUnits(&KAZ17)-GetReadyUnits(&KAZ17) +
@@ -784,7 +802,8 @@ void Towers(){
 		if(MyPeasant>40){
 			TryUnit(&TOWER, 4, 50, 100);
 			if(UpgIsRun(&FASTHORSE)) TryUnit(&TOWER, 6, 50, 100);
-			if(UpgIsRun(&XVIII)) TryUnit(&TOWER, 8, 50, 100);
+			if(UpgIsRun(&XVIII)) TryUnit(&TOWER, AI_TOWERS_18C, 50, 100);
+			if(UpgIsDone(&XVIII)) TrySlowTower();
 		};
 	};
 

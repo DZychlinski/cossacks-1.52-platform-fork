@@ -10,3 +10,4 @@ A building that is researching still counts as present for requirements, e.g. th
 Each new chat message shows the last 10 chat messages again.
 Upgrades being researched in your buildings are listed at the top right with percent done.
 Unit counts over icons (selected units, formations, units in a mine) show numbers up to 9999 instead of the infinity sign.
+A loaded game keeps its capture option (before, everything could be captured after loading). Older saves do not load.

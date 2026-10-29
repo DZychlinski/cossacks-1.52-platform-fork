@@ -3027,13 +3027,15 @@ void PreSaveGame( SaveBuf* SB, char* Messtr, int ID )
 
 	xBlockWrite( SB, &sz, 4 );
 	xBlockWrite( SB, Ptr, sz );
-	xBlockWrite( SB, &BalloonState, 4 );
-	xBlockWrite( SB, &CannonState, 4 );
-	xBlockWrite( SB, &NoArtilleryState, 4 );
-	xBlockWrite( SB, &XVIIIState, 4 );
-	xBlockWrite( SB, &DipCentreState, 4 );
-	xBlockWrite( SB, &ShipyardState, 4 );
-	xBlockWrite( SB, &MarketState, 4 );
+	//Fork: the game options are bytes, one byte each; the capture option (CaptState) is among them
+	xBlockWrite( SB, &BalloonState, 1 );
+	xBlockWrite( SB, &CannonState, 1 );
+	xBlockWrite( SB, &NoArtilleryState, 1 );
+	xBlockWrite( SB, &XVIIIState, 1 );
+	xBlockWrite( SB, &CaptState, 1 );
+	xBlockWrite( SB, &DipCentreState, 1 );
+	xBlockWrite( SB, &ShipyardState, 1 );
+	xBlockWrite( SB, &MarketState, 1 );
 
 	byte NN = MyNation;
 	xBlockWrite( SB, &NN, 8 );
@@ -3240,13 +3242,15 @@ void SFLB_PreLoadGame( SaveBuf* SB, bool LoadNation )
 
 	xBlockRead( SB, &sz, 4 );
 	xBlockRead( SB, Ptr, sz );
-	xBlockRead( SB, &BalloonState, 4 );
-	xBlockRead( SB, &CannonState, 4 );
-	xBlockRead( SB, &NoArtilleryState, 4 );
-	xBlockRead( SB, &XVIIIState, 4 );
-	xBlockRead( SB, &DipCentreState, 4 );
-	xBlockRead( SB, &ShipyardState, 4 );
-	xBlockRead( SB, &MarketState, 4 );
+	//Fork: the game options are bytes, one byte each; the capture option (CaptState) is among them
+	xBlockRead( SB, &BalloonState, 1 );
+	xBlockRead( SB, &CannonState, 1 );
+	xBlockRead( SB, &NoArtilleryState, 1 );
+	xBlockRead( SB, &XVIIIState, 1 );
+	xBlockRead( SB, &CaptState, 1 );
+	xBlockRead( SB, &DipCentreState, 1 );
+	xBlockRead( SB, &ShipyardState, 1 );
+	xBlockRead( SB, &MarketState, 1 );
 
 	if (LoadNation)
 	{

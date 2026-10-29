@@ -1323,8 +1323,8 @@ static int GetInsaneUpgradePriority(const ProposedProject* project, Nation* nati
 {
 	if (project->PKind != 1 || project->NIndex >= nation->NUpgrades)return 100;
 	NewUpgrade* upgrade = nation->UPGRADE[project->NIndex];
-	//food gathering (Fork: it had no priority and Insane AI starved), but not with the last food: bought
-	//first thing at the start it left 0 food and 8 of 18 peasants starved (AI log 2026-10-28 15:57, P6)
+	//food gathering (Fork: without priority the Insane AI starves), but not with the last food: bought
+	//first thing at the start it would leave no food and the peasants would starve
 	const int kInsaneFoodUpgradeReserve = 1500;
 	if (upgrade->CtgUpgrade == 19)
 	{
@@ -1519,8 +1519,8 @@ extern int tmtmt;
 static int RaidSize(City* CT);
 static int CountRaiders(City* CT);
 //Raids leave only above the easiest difficulty (original rule in CheckDiversants). Training riders for them
-//and keeping fast cavalry out of the armies follow the same rule: on the easiest level the riders sat at home
-//for raids that never left (AI log 2026-10-28 17:59, P4: about 150 riders, no raid)
+//and keeping fast cavalry out of the armies follow the same rule, so on the easiest level no riders wait at home
+//for raids that never leave
 static bool RaidsEnabled(const City* CT)
 {
 	return CT->AI_FAST_DIVERSION && CT->Difficulty;
@@ -1585,7 +1585,7 @@ static int AddRaiderTraining(City* city, int projectCount)
 //the cheapest one on offer about every kRaiderTrainPeriod game steps, if it costs at most
 //kRaiderUpgradeCostPercent of the stock. The 18th-century barracks are counted as the buildings the century
 //upgrade unlocks that train units (their names differ per nation).
-static const int kRaiderUpgradeBarracks = 2;//was 3: user request (2026-10-28)
+static const int kRaiderUpgradeBarracks = 2;
 static const int kRaiderUpgradeCostPercent = 50;
 static int g_RaiderUpgradeAt[8];
 static bool IsCenturyUpgrade(const NewUpgrade* NU);
@@ -1623,7 +1623,7 @@ static int AddRaiderUpgrades(City* city, int projectCount)
 
 //Fork: from the third 18th-century barracks the AI trains grenadiers, researches their upgrades and sends squads
 //of kGrenSquadSize against enemy mines (HandleGrenadierSquads); while a squad is missing, grenadiers do not
-//join the main armies (CheckMinArmyCreationAbility). User request (2026-10-29).
+//join the main armies (CheckMinArmyCreationAbility).
 static const int kGrenadierBarracks = 3;
 static const int kGrenSquadSize = 25;
 static const int kMaxGrenSquads = 2;
@@ -2023,8 +2023,8 @@ static bool FindSkladPlace(City* CT, int* xx, int* yy, int* options)
 		depY[nDep] = OB->RealY >> 11;
 		nDep++;
 	}
-	//a resource without a storehouse of its own comes first (wood, then stone): P6 of the 13:09 log had one
-	//storehouse at a forest, no stone, so no second Town Centre; the original stone search is skipped here
+	//a resource without a storehouse of its own comes first (wood, then stone): with only a
+	//storehouse at a forest there is no stone and no second Town Centre; the original stone search is skipped here
 	int want = !CT->NWoodSklads ? 1 : !CT->NStoneSklads ? 2 : 3;
 	int mask = 0;
 	bool found = false;
@@ -2798,7 +2798,7 @@ static word RemapBuildingToNation(Nation* Nat, word idx)
 //  3. one near gold mine all the way to the top level
 //  4. every other mine, far ones included, to level 2, nearest first
 //  5. every mine one level higher, lowest level first (ties: nearest), until all are at the top level
-//     (far mines: kFarMineMaxLevel); paid only when affordable, nothing held back (the late levels are
+//     (far mines stay at kFarMineMaxLevel); paid only when affordable, nothing held back (the late levels are
 //     expensive and the army comes first)
 //"Near" = within the nation's MINE_UPGRADE1_RADIUS of the Town Centre (as in UpgradeMines). While the chosen
 //upgrade of phases 1-4 is not affordable, its cost is held back from other AI spending (MineReserveBlocks).
@@ -2807,10 +2807,10 @@ static const int kMinePlanSecondGoldSec = 450;//7.5 min: a second gold mine to l
 static const int kMinePlanFullSec = 900;      //15 min: the full plan, with resources held back for it
 extern "C" int GetGameSeconds();//ActiveScenary.cpp: game-step clock, the same on every computer
 static const int kMinePlanMaxMines = 64;
-//Far mines (more than half the map width from the city centre) are hard to hold and easy prey:
-//phase 5 raises them only to level 4 in the game
+//Far mines (more than half the map width from the city centre) are hard to hold and easy prey: they stay at
+//level 2 in the game (phase 4), phase 5 does not raise them
 static const int kFarMineMapDivisor = 2;
-static const int kFarMineMaxLevel = 3;//upgrades done
+static const int kFarMineMaxLevel = kMineBasicLevel;//upgrades done
 
 struct MinePlanMine
 {
@@ -2967,7 +2967,7 @@ static MinePlanResult ForkMinePlan(City* CT)
 		for (int i = 0; i < NM; i++)
 		{
 			if (M[i].Busy || !M[i].CanUp || (M[i].Far && M[i].Lev >= kFarMineMaxLevel))continue;
-			//Fork: far mines last (user request 2026-10-29), then the lowest level, then the nearest
+			//Fork: far mines last, then the lowest level, then the nearest
 			if (best == -1 || (M[best].Far && !M[i].Far) ||
 				(M[best].Far == M[i].Far && (M[i].Lev < M[best].Lev || (M[i].Lev == M[best].Lev && M[i].Dist < M[best].Dist))))best = i;
 		}
@@ -2995,8 +2995,8 @@ static MinePlanResult ForkMinePlan(City* CT)
 }
 
 //Fork: once kGoldMinersEnough peasants work in gold mines, the AI sells wood and stone for gold only above
-//kKeepWoodStone of each. The scripts sold everything above 200,000 for gold, about 10:1 late in the game
-//(AI log 2026-10-28 13:54: 202,886 stone -> 20,537 gold), and never kept enough for Town Centres (the most
+//kKeepWoodStone of each. The scripts sold everything above 200,000 for gold, about 10:1 late in the game,
+//and never kept enough for Town Centres (the most
 //expensive European one costs about 510,000) or more Stables and barracks.
 static const int kGoldMinersEnough = 150;
 static const int kKeepWoodStone = 600000;
@@ -3012,9 +3012,8 @@ static int CountGoldMiners(City* CT)
 }
 
 //AI_Torg (ActiveScenary.cpp): the amount of SellRes the AI may sell for BuyRes (engine resource IDs)
-//No trades at all while gold, iron, coal and food are all above kRichStock: late in the game the AI traded wood and
-//stone away and could not pay for its sixth Town Centre (170,000 wood and stone) or the next barracks (user
-//report 2026-10-29)
+//No trades at all while gold, iron, coal and food are all above kRichStock: late in the game the AI would trade wood and
+//stone away and could not pay for the next Town Centre or barracks
 static const int kRichStock = 100000;
 static int* const kRichStockRes[] = { &GoldID, &IronID, &CoalID, &FoodID };
 int ForkLimitAISale(City* CT, int SellRes, int BuyRes, int SellAmount)
@@ -3040,8 +3039,8 @@ static bool IsCenturyUpgrade(const NewUpgrade* NU)
 }
 
 //A building that the 18th century unlocks (the 18c barracks) while the AI has fewer than kEarlyCenturyBuildings:
-//the second one waited for the mine reserve and then never became affordable (AI log 2026-10-28 18:33, P4: one
-//18c barracks from minute 20 to 40, so its fast cavalry upgrades never started either)
+//not held back by the mine reserve, which would keep the second one from ever becoming affordable (and with it the
+//fast cavalry upgrades)
 static const int kEarlyCenturyBuildings = 3;//as AI_KAZ18 in the scripts: the first 3 at full priority
 static bool IsEarlyCenturyBuilding(City* CT, word type)
 {
@@ -3073,18 +3072,16 @@ static const MineReserveExemptUsage kMineReserveExemptUsages[] =
 };
 
 //Fork: no new soldiers while the food stock would run out within kFoodRunOutSteps at the trend of the last
-//kFoodTrendSamples * kFoodSampleSteps. Units die when there is no food: the Insane AI kept training pikemen
-//until its stock hit 0 and then lost 45 peasants and 174 pikemen in two minutes, mostly to hunger (AI log
-//2026-10-28 13:35, P6). Peasants are still trained: they gather the food.
+//kFoodTrendSamples * kFoodSampleSteps. Units die when there is no food: an AI that trains soldiers until its
+//stock hits 0 loses peasants and soldiers to hunger. Peasants are still trained: they gather the food.
 static const int kFoodSampleSteps = 400;   //10 s
 static const int kFoodTrendSamples = 4;    //trend over 40 s
 static const int kFoodRunOutSteps = 2400;  //60 s
 static const int kFoodEmptyStock = 200;    //below this it is running out whatever the trend (flat at 0 is not falling)
-//above this the trend is spending (upgrades, the market), not hunger: P4 stopped training soldiers at 22962
-//and 28384 food (AI log 2026-10-28 17:59)
+//above this the trend is spending (upgrades, the market), not hunger
 static const int kFoodTrendMaxStock = 10000;
-//once stopped, soldiers resume only from this stock: resuming at 200 the next spearmen ate it within 10 s, and
-//the Insane AI switched 30 times in 10 minutes with its serfs starving (AI log 2026-10-28 20:17, P6)
+//once stopped, soldiers resume only from this stock: resuming lower, the next soldiers eat it at once and
+//training switches on and off while the peasants starve
 static const int kFoodResumeStock = 1000;
 struct FoodTrend
 {
@@ -3172,9 +3169,8 @@ static bool MineReserveBlocks(City* CT, const ProposedProject* PRP, const MinePl
 }
 
 //Fork: while the 18th century can be researched, units and upgrades may not spend its gold and iron.
-//The AI never got there: mercenaries, Sich Cossacks and mercenary dragoons spent each bit of gold the
-//moment it came in, so it never held the 9800 gold the century costs (AI log 2026-10-28 17:59, P4:
-//52000 food from minute 11, gold below 1000 for most of the 20 minutes, no 18th century).
+//Otherwise mercenaries, Sich Cossacks and mercenary dragoons spend each bit of gold the moment it comes in, and
+//the AI never holds the 9800 gold the century costs.
 //Food is not held back: soldiers eat it, and the scripts already save it with the market (AI_SetRes).
 static int* const kCenturyReserveRes[] = { &GoldID, &IronID };
 
@@ -3227,9 +3223,8 @@ static bool CenturyReserveBlocks(City* CT, const ProposedProject* PRP, const New
 }
 
 //Fork: the mine and century reserves never hold back soldiers while the army is smaller than the number of
-//peasants or the base is under attack. Saving for the 18th century stopped the Russian spearmen (they cost iron)
-//for 3 minutes after a lost battle, then the mine reserve held back every soldier for 9 minutes while 130,000
-//food, 176,000 wood and 191,000 stone piled up: 17-39 soldiers against 700 (AI log 2026-10-28 20:36, P4)
+//peasants or the base is under attack. Otherwise the reserves can hold back every soldier
+//for minutes after a lost battle while other resources pile up and the enemy army is many times larger
 static bool BaseThreatActive(int NI);
 static bool IsSoldierProject(City* CT, const ProposedProject* PRP)
 {
@@ -4114,7 +4109,21 @@ static int CountMinesByRes(Nation* NT, int res)
 	return n;
 }
 
-static const int kLateMineBarracks = 3;
+//Fork: from this many Town Centres mines are taken on the whole map
+static const int kWholeMapMineCenters = 4;
+static int CountCenters(Nation* NT)
+{
+	int n = 0;
+	int N = NtNUnits[NT->NNUM];
+	word* units = NatList[NT->NNUM];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->Ready && OB->newMons->Usage == CenterID)n++;
+	}
+	return n;
+}
 void TakeNewMineBrain(Idea* ID)
 {
 	City* CT = ID->CT;
@@ -4182,9 +4191,10 @@ BeginMine:
 		//Fork: at least the map width (msx cells of 32 px; MinDist is in 128 px), so the AI also takes the
 		//mines of unused starting positions; the nearest safe mine still comes first
 		int captureDist = max(NT->MINE_CAPTURE_RADIUS >> 2, msx >> 2);
-		//from the third 18th-century barracks: the whole map (its diagonal); far mines are upgraded last and only
-		//to level 4 (ForkMinePlan). User request (2026-10-29)
-		if (CountCenturyBarracks(CT) >= kLateMineBarracks)captureDist = (msx >> 2) * 3 / 2;
+		//from kWholeMapMineCenters Town Centres: the whole map (its diagonal); far mines are upgraded last and only
+		//to level 2 (ForkMinePlan)
+		int centers = CountCenters(NT);
+		if (centers >= kWholeMapMineCenters)captureDist = (msx >> 2) * 3 / 2;
 		if (MinDist > captureDist)
 		{
 			TD->Mines[IDI] = INITBEST;
@@ -4811,8 +4821,8 @@ void City::KeepEnoughFoodWorkers()
 //Fork: at least a quarter of the peasants on wood and stone, whatever the weights, split by the script's own
 //wood : stone weights (each gets its share). The scripts weigh food 9 : wood 1 : stone 1 until the Academy's
 //wood upgrade runs, saving food for it; an AI spending all its food on soldiers (Insane) never afforded the
-//upgrade, kept 1-3 peasants on wood and none on stone, could not pay for a Town Centre (it needs stone) and
-//collapsed (AI logs 2026-10-28 12:48 and 13:09, P6)
+//upgrade, kept a few peasants on wood and none on stone, could not pay for a Town Centre (it needs stone) and
+//collapsed
 static const int kMinWoodStoneShareDivisor = 4;
 static const int kMinStoneShareDivisor = 10;
 void City::KeepMinWoodStoneWorkers()
@@ -4843,8 +4853,8 @@ void City::KeepMinWoodStoneWorkers()
 
 //Fork: from the fourth 18th-century barracks the peasants outside the mines aim at kLateFood food, kLateWood wood
 //and kLateStone stone workers (fewer: in the same proportion). Mines stay fully staffed: only the peasants
-//outside them are counted. A game peaked at 100 on wood, 100 on stone and 35 on food with 1,260 in the mines,
-//too little wood and stone for the next Town Centre or barracks (user report 2026-10-29)
+//outside them are counted. Otherwise most peasants end up in the mines, with too little wood and stone for the
+//next Town Centre or barracks
 static const int kLateWorkerBarracks = 4;
 static const int kLateFood = 100;
 static const int kLateWood = 250;
@@ -4903,7 +4913,7 @@ static bool BaseThreatActive(int NI)
 //a building that stands within a quarter of the map width of the Town Centre. The old check took the armies of
 //GlobalArmyInfo (neighbouring occupied cells joined together) and the corners of each one's bounding box: an
 //attack joined to the column behind it spanned half the map, its corners were nowhere near the base and
-//nobody defended (AI log 2026-10-28 18:33, P6 at 34:28: hundreds of enemies among its buildings, no BASE-THREAT)
+//nobody defended
 static const int kBaseThreatScanPeriod = 32;    //game steps between two scans of one nation
 static const int kBaseThreatCellShift = 8;      //256 px cells
 static const int kBaseThreatBuildingCells = 6;  //about 1500 px around a building
@@ -4971,7 +4981,7 @@ static bool ScanBaseThreat(City* CT, int* tx, int* ty, int* count)
 	return true;
 }
 //Fork: each nation's AI runs on every 8th game step only (Ddex1.cpp: tmtmt % 8 == its number), so a throttle
-//like (tmtmt + NI) % 16 never fired for most nations: the Insane AI (P6) never engaged idle soldiers nor scanned
+//like (tmtmt + NI) % 16 never fired for most nations: some AIs never engaged idle soldiers nor scanned
 //for base threats. Periodic AI work keeps the time of its last run instead.
 static bool AIPeriodDue(int& last, int period)
 {
@@ -5002,7 +5012,7 @@ void City::EngageIdleSoldiers()
 		if (OB->Zombi)
 		{
 			//led by its army (artillery is aimed by SearchEnemyForAIArtillery); artillery near home also comes to
-			//a base threat: cannons and howitzers stayed out of the defence (user report 2026-10-29)
+			//a base threat: otherwise cannons and howitzers stay out of the defence
 			if (NM->Artilery && threat && nearBase && !OB->LocalOrder)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
 			continue;
 		}
@@ -5012,8 +5022,8 @@ void City::EngageIdleSoldiers()
 		if (br != 0xFFFF && br != Agressors.ID && br != FreeArmy.ID && br != Guards.ID && br != Defenders.ID)
 		{
 			//in an army: one that stands without orders (gathering, the Insane AI's held assault) fights back
-			//too; in their brigades the soldiers never look for enemies themselves and stood still while the
-			//enemy cut them down (2026-10-28 18:33, P6 at 34:28 and 37:00). Marching or fighting: the army leads.
+			//too; in their brigades the soldiers never look for enemies themselves and would stand still while the
+			//enemy cuts them down. Marching or fighting: the army leads.
 			if (OB->LocalOrder)continue;
 			word close = SearchVictim(OB, 0, kAIEngageWalkingRadius);
 			if (close != 0xFFFF)OB->AttackObj(close, 128 + 16, 0);
@@ -5809,8 +5819,8 @@ void ArmyLocalSendToLink(AI_Army* ARM)
 		};
 		ps += 5;
 	};
-	//Fork: the step ends once kArmyArrivedShare of the brigades are there (before: all of them), so the army does
-	//not stop at every area of its way waiting for the slowest brigade (walk-pause-walk, user report 2026-10-29)
+	//Fork: the step ends once kArmyArrivedShare of the brigades are there (not all of them), so the army does
+	//not stop at every area of its way waiting for the slowest brigade
 	if (!NR || NR * kArmyArrivedShareDen <= (NR + RD) * (kArmyArrivedShareDen - kArmyArrivedShareNum))
 	{
 		ARM->DeleteAOrder();
@@ -6846,8 +6856,7 @@ void Army_Bitva::AddEnemXY(int x, int y, int MyTop, byte msk)
 
 				//Fork: BitMask covers the first 8192 unit indices only, and units above were skipped: late in a
 				//long game every new soldier has a higher index, the enemy list of the battle stayed empty and
-				//whole armies stood in contact without fighting (AI log 2026-10-29 12:38, P4 at 118:15: 218 of
-				//230 soldiers next to enemies #9020-#10249 idle). Those are looked up in the list instead; the
+				//whole armies stood in contact without fighting. Those are looked up in the list instead; the
 				//order keeps its size, so battles in saved games still load.
 				bool known;
 				if (of < int(sizeof(BitMask)))
@@ -7272,6 +7281,33 @@ public:
 int GetAmountOfProtectors(OneObject* OBJ);
 word GetNearestDefender(OneObject* OB);
 word GetNextSafeCell(byte NI, int F, int start, int Fin);
+#ifdef AILOG_ENABLED
+//Fork: each raid's target and route about every 30 s
+static const int kRaidLogPeriod = 1200;
+static int g_RaidLogAt[8][MaxArm];
+static void LogRaidState(AI_Army* ARM, OneObject* target, int dist, const char* way)
+{
+	if (!AIPeriodDue(g_RaidLogAt[ARM->NI][ARM - ARM->CT->ARMS], kRaidLogPeriod))return;
+	int riders = 0;
+	for (int i = 0; i < ARM->NExBrigs; i++)riders += ARM->ExBrigs[i].Brig->NMemb;
+	if (target)AILog_Event(ARM->NI, "RAID-STATE raid army %d, %d riders: target #%d %s of P%d, %d away, %s",
+		int(ARM - ARM->CT->ARMS), riders, target->Index, target->Ref.General->Message, target->NNUM, dist, way);
+	else AILog_Event(ARM->NI, "RAID-STATE raid army %d, %d riders: no target", int(ARM - ARM->CT->ARMS), riders);
+}
+#endif
+//Fork: what the game's capture option (CaptState, as in TestCapture) lets a raid capture; peasants it may not
+//capture it kills instead
+extern byte CaptState;
+static bool RaidMayCapture(OneObject* OB)
+{
+	switch (CaptState)
+	{
+	case 1: return !OB->newMons->Peasant;
+	case 2: return !(OB->newMons->Peasant || OB->newMons->Usage == CenterID || OB->newMons->Usage == MineID);
+	case 3: return OB->newMons->Artilery != 0;
+	}
+	return true;
+}
 int LastRND = 0;
 void A_DiversiaLink(AI_Army* ARM)
 {
@@ -7329,14 +7365,16 @@ void A_DiversiaLink(AI_Army* ARM)
 				{
 					OneObject* OB = Group[MID];
 					if (!OB || OB->Sdoxlo || (OB->NMask & mask) || !OB->newMons) continue;
-					if (!OB->newMons->Capture && OB->Ready) continue;
+					bool capturable = (OB->newMons->Capture || !OB->Ready) && RaidMayCapture(OB);
+					if (!capturable && !OB->newMons->Peasant) continue;
 					int prot = GetAmountOfProtectors(OB);
 					if (prot >= 5) continue;
 					int tier = prot ? 1 : 0;
 					int HimTop = GetTopology(OB->RealX >> 4, OB->RealY >> 4);
 					if (HimTop == 0xFFFF) continue;
 					int dst = (HimTop == MyTop ? 0 : LinksDist[HimTop * NAreas + MyTop]);
-					if (dst < 30)
+					//Fork: targets at any reachable distance: late in the game little is left near the base
+					if (dst != 0xFFFF)
 					{
 						if (tier == 0) NearDst = NearDst;  // keep NearDst for fear logic
 						if (dst < RMid[tier])
@@ -7374,7 +7412,22 @@ void A_DiversiaLink(AI_Army* ARM)
 					if (NextTop == MyTop)
 					{
 						word DEF = GetNearestDefender(EOB);
-						if (DEF == 0xFFFF)
+						if (DEF == 0xFFFF && !RaidMayCapture(EOB))
+						{
+							//Fork: a peasant it may not capture: attack it
+							ARM->ClearZombi();
+							for (int i = 0; i < ARM->NExBrigs; i++)
+							{
+								Brigade* BR = ARM->ExBrigs[i].Brig;
+								for (int j = 0; j < BR->NMemb; j++)
+								{
+									OneObject* OB = Group[BR->Memb[j]];
+									if (OB && OB->Serial == BR->MembSN[j] && (!OB->LocalOrder || OB->EnemyID == 0xFFFF))
+										OB->AttackObj(EOB->Index, 192);
+								}
+							}
+						}
+						else if (DEF == 0xFFFF)
 						{
 							// capture
 							ARM->ClearZombi();
@@ -7417,6 +7470,19 @@ void A_DiversiaLink(AI_Army* ARM)
 						ARM->WideLocalSendTo(AR->x << 6, AR->y << 6, 192, 1);
 						ARM->SetZombi();
 					}
+					else
+					{
+						//Fork: no way around the enemy's danger zones: ride straight at the target
+						Area* AR = TopMap + HimTop;
+						ARM->WideLocalSendTo(AR->x << 6, AR->y << 6, 192, 1);
+						ARM->SetZombi();
+					}
+#ifdef AILOG_ENABLED
+					LogRaidState(ARM, EOB, HimTop == MyTop ? 0 : LinksDist[HimTop * NAreas + MyTop],
+						NextTop != MyTop ? (NextTop != 0xFFFF ? "safe way" : "straight") :
+						GetNearestDefender(EOB) != 0xFFFF ? "at the target, fighting its defenders" :
+						RaidMayCapture(EOB) ? "at the target, capturing" : "at the target, attacking it");
+#endif
 				}
 			}
 			else OR1->EnMID = 0xFFFF;
@@ -7426,6 +7492,9 @@ void A_DiversiaLink(AI_Army* ARM)
 		// 3. Fallback when no target
 		if (OR1->EnMID == 0xFFFF)
 		{
+#ifdef AILOG_ENABLED
+			LogRaidState(ARM, nullptr, 0, "");
+#endif
 			ARM->ClearZombi();
 			int MyTopLinks = MyTop;
 			int NArm = GNFO.EINF[ARM->CT->NI]->GAINF.NArmy;
@@ -7533,6 +7602,16 @@ static int RaidSize(City* CT)
 	return size;
 }
 
+//Fork: an army is on a raid while its order chain holds the raid order: on the way the raid pushes a march order on
+//top of it (WideLocalSendTo, OrdType 1)
+static bool IsRaid(const AI_Army* A)
+{
+	if (!A->Enabled)return false;
+	for (ArmyOrder* O = A->AOrder; O; O = O->Next)
+		if (O->ALink == &A_DiversiaLink)return true;
+	return false;
+}
+
 static int CountRaiders(City* CT)
 {
 	int n = 0;
@@ -7545,8 +7624,7 @@ static int CountRaiders(City* CT)
 }
 
 #ifdef AILOG_ENABLED
-//Once a minute: where the fast cavalry is. A game made 257 Sich Cossacks in 4 minutes and lost none, yet no
-//raid left (AI log 2026-10-28 18:33, P4)
+//Once a minute: where the fast cavalry is (riders that never leave on a raid)
 static void LogRaiders(City* CT)
 {
 	static int loggedAt[8];
@@ -7587,16 +7665,15 @@ static void LogRaiders(City* CT)
 	for (int i = 0; i < MaxArm; i++)
 	{
 		AI_Army* A = CT->ARMS + i;
-		if (A->Enabled && A->AOrder && A->AOrder->ALink == &A_DiversiaLink)raids++;
+		if (IsRaid(A))raids++;
 	}
 	AILog_Event(CT->NI, "RAIDERS %d waiting (raid at %d), %d in home groups, %d in armies (order %s), %d in other brigades (order %s), %d without group; %d raids out",
 		pool, RaidSize(CT), home, army, armyOrder, other, otherOrder, loose, raids);
 }
 #endif
 
-//Fork: a raid ends after kRaidMaxSteps and its riders return to the pool: raids never ended before (their
-//LastEnemyTime is never updated), 164 riders sat in 3 raids from minute 35 to 93, so no new raid could leave
-//while 254 riders waited (AI log 2026-10-29 07:18, P6)
+//Fork: a raid ends after kRaidMaxSteps and its riders return to the pool: otherwise raids never end (their
+//LastEnemyTime is never updated), and no new raid can leave while the riders wait in the pool
 static const int kRaidMaxSteps = 40 * 300;//5 minutes
 static int g_RaidStartAt[8][MaxArm];
 //Fast cavalry that is not on a raid and not fighting returns to the raid pool about every 10 s: it kept joining
@@ -7633,7 +7710,7 @@ static void SweepRaiders(City* CT)
 		if (BR->ArmyID < MaxArm)
 		{
 			AI_Army* A = CT->ARMS + BR->ArmyID;
-			if (A->Enabled && A->AOrder && A->AOrder->ALink == &A_DiversiaLink)continue;//on a raid
+			if (IsRaid(A))continue;//on a raid
 		}
 		OB->Zombi = false;
 		if (BR->RemoveOne(OB->BrIndex, &CT->Agressors))
@@ -7655,7 +7732,7 @@ void CheckDiversants(City* CT)
 	for (int i = 0; i < MaxArm; i++)
 	{
 		AI_Army* A = CT->ARMS + i;
-		if (!(A->Enabled && A->AOrder && A->AOrder->ALink == &A_DiversiaLink))continue;
+		if (!IsRaid(A))continue;
 		int& at = g_RaidStartAt[CT->NI][i];
 		if (tmtmt >= at && tmtmt - at < kRaidMaxSteps)continue;
 #ifdef AILOG_ENABLED
@@ -7670,7 +7747,7 @@ void CheckDiversants(City* CT)
 	for (int i = 0; i < MaxArm; i++)
 	{
 		AI_Army* AIAR = CT->ARMS + i;
-		if (AIAR->Enabled && AIAR->AOrder && AIAR->AOrder->ALink == &A_DiversiaLink)NDivArms++;
+		if (IsRaid(AIAR))NDivArms++;
 	}
 	if (NDivArms >= kMaxRaidsAtOnce)return;
 	int old = BriMax[2];
