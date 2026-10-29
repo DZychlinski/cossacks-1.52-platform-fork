@@ -510,9 +510,29 @@ bool SearchTowerPlace(int* xx1, int* yy1, SearchFunction* SFN, int r, int rMin, 
 	int MyTop = GetTopology(x << 7, y << 7);
 	if (MyTop >= 0xFFFE)return false;
 	MyTop *= NAreas;
+	//Fork: the path-distance check (TDST - PrevTopDst < 14) grew from 0 at the centre in SearchPlace; starting at
+	//ring rMin every place was already further and none was accepted: no tower in a 93-minute game (AI log
+	//2026-10-29 07:18). It starts from the nearest place of the first ring instead.
+	int StartTopDst = -1;
+	if (rMin < RRad)
+	{
+		char* xi = Rarr[rMin].xi;
+		char* yi = Rarr[rMin].yi;
+		for (int j = 0; j < Rarr[rMin].N; j++)
+		{
+			int xx = x + xi[j];
+			int yy = y + yi[j];
+			if (xx <= 0 || yy <= 0 || xx >= SsMaxX || yy >= SsMaxY)continue;
+			int top = TopRef[xx + xx + (yy << (TopSH + 1))];
+			if (top >= 0xFFFE)continue;
+			int TDST = LinksDist[MyTop + top];
+			if (StartTopDst == -1 || TDST < StartTopDst)StartTopDst = TDST;
+		}
+	}
+	if (StartTopDst < 0)StartTopDst = 0;
 	for (int pass = toEnemy ? 0 : 1; pass < 2; pass++)
 	{
-	int PrevTopDst = 0;
+	int PrevTopDst = StartTopDst;
 	int bestX = -1;
 	int bestY = -1;
 	int bestH = 0;

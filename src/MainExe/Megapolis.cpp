@@ -1525,6 +1525,49 @@ static bool RaidsEnabled(const City* CT)
 {
 	return CT->AI_FAST_DIVERSION && CT->Difficulty;
 }
+static bool AIPeriodDue(int& last, int period);
+//The cheapest proposed unit of this Usage costing at most maxPercent of the stock, -1 if none
+static int PickUnitProject(City* city, byte usage, int maxPercent)
+{
+	Nation* nation = city->Nat;
+	int best = -1;
+	for (int i = 0; i < city->NProp; i++)
+	{
+		ProposedProject* P = city->Prop + i;
+		if (P->PKind != 0 || P->NIndex >= nation->NMon)continue;
+		if (nation->Mon[P->NIndex]->newMons->Usage != usage || P->Percent > maxPercent)continue;
+		if (best == -1 || P->Percent < city->Prop[best].Percent)best = i;
+	}
+	return best;
+}
+//The cheapest proposed upgrade improving units of this Usage costing at most maxPercent of the stock, -1 if none
+static int PickUnitUpgrade(City* city, byte usage, int maxPercent)
+{
+	Nation* nation = city->Nat;
+	int best = -1;
+	for (int i = 0; i < city->NProp; i++)
+	{
+		ProposedProject* P = city->Prop + i;
+		if (P->PKind != 1 || P->NIndex >= nation->NUpgrades || P->Percent > maxPercent)continue;
+		if (best != -1 && P->Percent >= city->Prop[best].Percent)continue;
+		NewUpgrade* NU = nation->UPGRADE[P->NIndex];
+		if (NU->CtgUpgrade == 11)continue;//unlocks something, does not improve units
+		bool fits = false;
+		for (word t = 0; t < nation->NMon && !fits; t++)
+		{
+			if (nation->Mon[t]->newMons->Usage == usage && UpgradeAffectsUnitType(NU, nation, t))fits = true;
+		}
+		if (fits)best = i;
+	}
+	return best;
+}
+static int AddBestProject(City* city, int projectCount, int best)
+{
+	if (best == -1)return projectCount;
+	for (int i = 0; i < projectCount; i++)if (city->BestProj[i] == best)return projectCount;
+	city->BestProj[projectCount++] = best;
+	return projectCount;
+}
 static int AddRaiderTraining(City* city, int projectCount)
 {
 	if (!RaidsEnabled(city) || PeaceTimeLeft || projectCount >= 127)return projectCount;
@@ -1532,20 +1575,10 @@ static int AddRaiderTraining(City* city, int projectCount)
 	int period = GetGameSeconds() < kRaiderEarlySec ? kRaiderTrainPeriodEarly : kRaiderTrainPeriod;
 	if (tmtmt - at < period && tmtmt >= at)return projectCount;
 	if (CountRaiders(city) >= RaidSize(city))return projectCount;
-	Nation* nation = city->Nat;
-	int best = -1;
-	for (int i = 0; i < city->NProp; i++)
-	{
-		ProposedProject* P = city->Prop + i;
-		if (P->PKind != 0 || P->NIndex >= nation->NMon)continue;
-		if (nation->Mon[P->NIndex]->newMons->Usage != FastHorseID || P->Percent > kRaiderCostPercent)continue;
-		if (best == -1 || P->Percent < city->Prop[best].Percent)best = i;
-	}
+	int best = PickUnitProject(city, FastHorseID, kRaiderCostPercent);
 	if (best == -1)return projectCount;
 	at = tmtmt;
-	for (int i = 0; i < projectCount; i++)if (city->BestProj[i] == best)return projectCount;
-	city->BestProj[projectCount++] = best;
-	return projectCount;
+	return AddBestProject(city, projectCount, best);
 }
 
 //Fork: from the second 18th-century barracks on, the AI researches upgrades of its fast cavalry for the raids:
@@ -1585,26 +1618,69 @@ static int AddRaiderUpgrades(City* city, int projectCount)
 	if (tmtmt - at < kRaiderTrainPeriod && tmtmt >= at)return projectCount;
 	at = tmtmt;
 	if (CountCenturyBarracks(city) < kRaiderUpgradeBarracks)return projectCount;
-	Nation* nation = city->Nat;
-	int best = -1;
-	for (int i = 0; i < city->NProp; i++)
+	return AddBestProject(city, projectCount, PickUnitUpgrade(city, FastHorseID, kRaiderUpgradeCostPercent));
+}
+
+//Fork: from the third 18th-century barracks the AI trains grenadiers, researches their upgrades and sends squads
+//of kGrenSquadSize against enemy mines (HandleGrenadierSquads); while a squad is missing, grenadiers do not
+//join the main armies (CheckMinArmyCreationAbility). User request (2026-10-29).
+static const int kGrenadierBarracks = 3;
+static const int kGrenSquadSize = 25;
+static const int kMaxGrenSquads = 2;
+static const int kGrenSquadMinAlive = 5;     //fewer left: the squad goes home
+static const int kGrenadiersWanted = kGrenSquadSize * kMaxGrenSquads;//trained on top of the scripts while fewer
+static const int kGrenTrainPeriod = 80;      //game steps between two grenadiers
+static const int kGrenCostPercent = 20;      //as the scripts' other units
+static const int kGrenUpgradeCostPercent = 50;
+static const int kGrenArmyType = 6;          //ArmType of GRENADER units
+static int g_GrenTrainAt[8];
+static int g_GrenUpgradeAt[8];
+static int g_GrenSquad[8][kMaxGrenSquads];   //brigade index + 1, 0 = none
+static int g_GrenSquadAt[8];
+static bool GrenadiersEnabled(City* city)
+{
+	return city->Difficulty && CountCenturyBarracks(city) >= kGrenadierBarracks;
+}
+static int CountGrenSquads(City* city)
+{
+	int n = 0;
+	for (int s = 0; s < kMaxGrenSquads; s++)if (g_GrenSquad[city->NI][s])n++;
+	return n;
+}
+static bool IsGrenSquadBrigade(int NI, word br)
+{
+	for (int s = 0; s < kMaxGrenSquads; s++)if (g_GrenSquad[NI][s] && g_GrenSquad[NI][s] - 1 == br)return true;
+	return false;
+}
+static bool GrenSquadsWanted(City* city)
+{
+	return GrenadiersEnabled(city) && CountGrenSquads(city) < kMaxGrenSquads;
+}
+static int CountUnitsOfUsage(City* city, byte usage)
+{
+	int n = 0;
+	int N = NtNUnits[city->NI];
+	word* units = NatList[city->NI];
+	for (int i = 0; i < N; i++)
 	{
-		ProposedProject* P = city->Prop + i;
-		if (P->PKind != 1 || P->NIndex >= nation->NUpgrades || P->Percent > kRaiderUpgradeCostPercent)continue;
-		if (best != -1 && P->Percent >= city->Prop[best].Percent)continue;
-		NewUpgrade* NU = nation->UPGRADE[P->NIndex];
-		if (NU->CtgUpgrade == 11)continue;//unlocks something, does not improve units
-		bool raider = false;
-		for (word t = 0; t < nation->NMon && !raider; t++)
-		{
-			if (nation->Mon[t]->newMons->Usage == FastHorseID && UpgradeAffectsUnitType(NU, nation, t))raider = true;
-		}
-		if (raider)best = i;
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->newMons->Usage == usage)n++;
 	}
-	if (best == -1)return projectCount;
-	for (int i = 0; i < projectCount; i++)if (city->BestProj[i] == best)return projectCount;
-	city->BestProj[projectCount++] = best;
-	return projectCount;
+	return n;
+}
+static int AddGrenadierTraining(City* city, int projectCount)
+{
+	if (PeaceTimeLeft || projectCount >= 127 || !GrenadiersEnabled(city))return projectCount;
+	if (!AIPeriodDue(g_GrenTrainAt[city->NI], kGrenTrainPeriod))return projectCount;
+	if (CountUnitsOfUsage(city, GrenaderID) >= kGrenadiersWanted)return projectCount;
+	return AddBestProject(city, projectCount, PickUnitProject(city, GrenaderID, kGrenCostPercent));
+}
+static int AddGrenadierUpgrades(City* city, int projectCount)
+{
+	if (projectCount >= 127 || !GrenadiersEnabled(city))return projectCount;
+	if (!AIPeriodDue(g_GrenUpgradeAt[city->NI], kRaiderTrainPeriod))return projectCount;
+	return AddBestProject(city, projectCount, PickUnitUpgrade(city, GrenaderID, kGrenUpgradeCostPercent));
 }
 
 word City::FindNeedProject()
@@ -1626,6 +1702,8 @@ word City::FindNeedProject()
 		int n = ApplyInsaneStrategy(this, NBestProjects);
 		n = AddRaiderTraining(this, n);
 		n = AddRaiderUpgrades(this, n);
+		n = AddGrenadierTraining(this, n);
+		n = AddGrenadierUpgrades(this, n);
 		NBestProjects = n;
 		return n;
 	};
@@ -2889,7 +2967,9 @@ static MinePlanResult ForkMinePlan(City* CT)
 		for (int i = 0; i < NM; i++)
 		{
 			if (M[i].Busy || !M[i].CanUp || (M[i].Far && M[i].Lev >= kFarMineMaxLevel))continue;
-			if (best == -1 || M[i].Lev < M[best].Lev || (M[i].Lev == M[best].Lev && M[i].Dist < M[best].Dist))best = i;
+			//Fork: far mines last (user request 2026-10-29), then the lowest level, then the nearest
+			if (best == -1 || (M[best].Far && !M[i].Far) ||
+				(M[best].Far == M[i].Far && (M[i].Lev < M[best].Lev || (M[i].Lev == M[best].Lev && M[i].Dist < M[best].Dist))))best = i;
 		}
 		if (best == -1)return R;
 		word upg = MUP->UIDS[M[best].Lev];
@@ -2932,8 +3012,16 @@ static int CountGoldMiners(City* CT)
 }
 
 //AI_Torg (ActiveScenary.cpp): the amount of SellRes the AI may sell for BuyRes (engine resource IDs)
+//No trades at all while gold, iron, coal and food are all above kRichStock: late in the game the AI traded wood and
+//stone away and could not pay for its sixth Town Centre (170,000 wood and stone) or the next barracks (user
+//report 2026-10-29)
+static const int kRichStock = 100000;
+static int* const kRichStockRes[] = { &GoldID, &IronID, &CoalID, &FoodID };
 int ForkLimitAISale(City* CT, int SellRes, int BuyRes, int SellAmount)
 {
+	bool rich = true;
+	for (int* res : kRichStockRes)if (XRESRC(CT->Nat->NNUM, *res) < kRichStock)rich = false;
+	if (rich)return 0;
 	if (BuyRes != GoldID || (SellRes != TreeID && SellRes != StoneID))return SellAmount;
 	if (CountGoldMiners(CT) < kGoldMinersEnough)return SellAmount;
 	int spare = XRESRC(CT->Nat->NNUM, SellRes) - kKeepWoodStone;
@@ -4026,6 +4114,7 @@ static int CountMinesByRes(Nation* NT, int res)
 	return n;
 }
 
+static const int kLateMineBarracks = 3;
 void TakeNewMineBrain(Idea* ID)
 {
 	City* CT = ID->CT;
@@ -4093,6 +4182,9 @@ BeginMine:
 		//Fork: at least the map width (msx cells of 32 px; MinDist is in 128 px), so the AI also takes the
 		//mines of unused starting positions; the nearest safe mine still comes first
 		int captureDist = max(NT->MINE_CAPTURE_RADIUS >> 2, msx >> 2);
+		//from the third 18th-century barracks: the whole map (its diagonal); far mines are upgraded last and only
+		//to level 4 (ForkMinePlan). User request (2026-10-29)
+		if (CountCenturyBarracks(CT) >= kLateMineBarracks)captureDist = (msx >> 2) * 3 / 2;
 		if (MinDist > captureDist)
 		{
 			TD->Mines[IDI] = INITBEST;
@@ -4749,6 +4841,35 @@ void City::KeepMinWoodStoneWorkers()
 	NeedPS += addStone;
 }
 
+//Fork: from the fourth 18th-century barracks the peasants outside the mines aim at kLateFood food, kLateWood wood
+//and kLateStone stone workers (fewer: in the same proportion). Mines stay fully staffed: only the peasants
+//outside them are counted. A game peaked at 100 on wood, 100 on stone and 35 on food with 1,260 in the mines,
+//too little wood and stone for the next Town Centre or barracks (user report 2026-10-29)
+static const int kLateWorkerBarracks = 4;
+static const int kLateFood = 100;
+static const int kLateWood = 250;
+static const int kLateStone = 250;
+void City::KeepLateGameWorkers()
+{
+	if (CountCenturyBarracks(this) < kLateWorkerBarracks)return;
+	int miners = 0;
+	int N = NtNUnits[NI];
+	word* units = NatList[NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->NewBuilding && OB->newMons->Usage == MineID && OB->NNUM == NI)miners += OB->NInside;
+	}
+	int land = NPeas - miners;
+	int total = kLateFood + kLateWood + kLateStone;
+	if (land <= 0)return;
+	if (land > total)land = total;
+	NeedPF = kLateFood * land / total;
+	NeedPW = kLateWood * land / total;
+	NeedPS = land - NeedPF - NeedPW;
+}
+
 //Fork: AI soldiers waiting at home (the base groups, not armies on the march) attack the nearest enemy within
 //kAIEngageRadius, an attack-move of sorts. On their own they only searched their short radius, so an army
 //shooting the base from further away, or standing next to a building that trains units, met no resistance.
@@ -4875,10 +4996,19 @@ void City::EngageIdleSoldiers()
 	{
 		if (units[i] == 0xFFFF)continue;
 		OneObject* OB = Group[units[i]];
-		if (!OB || OB->Sdoxlo || OB->Hidden || OB->Zombi)continue;//dead, inside, or AI artillery
+		if (!OB || OB->Sdoxlo || OB->Hidden)continue;//dead or inside
 		NewMonster* NM = OB->newMons;
-		if (NM->Building || NM->Peasant || NM->Artilery || NM->Officer || NM->Baraban || OB->Wall)continue;
+		bool nearBase = Norma((OB->RealX >> 4) - (CenterX << 7), (OB->RealY >> 4) - (CenterY << 7)) <= (msx << 5) / kBaseThreatMapDivisor;
+		if (OB->Zombi)
+		{
+			//led by its army (artillery is aimed by SearchEnemyForAIArtillery); artillery near home also comes to
+			//a base threat: cannons and howitzers stayed out of the defence (user report 2026-10-29)
+			if (NM->Artilery && threat && nearBase && !OB->LocalOrder)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+			continue;
+		}
+		if (NM->Building || NM->Peasant || NM->Officer || NM->Baraban || OB->Wall)continue;
 		word br = OB->BrigadeID;
+		if (br != 0xFFFF && IsGrenSquadBrigade(NI, br))continue;//led by HandleGrenadierSquads
 		if (br != 0xFFFF && br != Agressors.ID && br != FreeArmy.ID && br != Guards.ID && br != Defenders.ID)
 		{
 			//in an army: one that stands without orders (gathering, the Insane AI's held assault) fights back
@@ -4887,9 +5017,7 @@ void City::EngageIdleSoldiers()
 			if (OB->LocalOrder)continue;
 			word close = SearchVictim(OB, 0, kAIEngageWalkingRadius);
 			if (close != 0xFFFF)OB->AttackObj(close, 128 + 16, 0);
-			else if (threat && NM->Usage != FastHorseID &&
-				Norma((OB->RealX >> 4) - (CenterX << 7), (OB->RealY >> 4) - (CenterY << 7)) <= (msx << 5) / kBaseThreatMapDivisor)
-				OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+			else if (threat && nearBase)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
 			continue;
 		}
 		if (OB->LocalOrder)
@@ -4901,8 +5029,8 @@ void City::EngageIdleSoldiers()
 		}
 		word victim = SearchVictim(OB, 0, kAIEngageRadius);
 		if (victim != 0xFFFF)OB->AttackObj(victim, 128 + 16, 0);
-		//low priority: they fight on the way. Fast cavalry stays for the raids (it still fights within reach)
-		else if (threat && NM->Usage != FastHorseID)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+		//low priority: they fight on the way. Fast cavalry waiting for a raid defends too (it stayed out before)
+		else if (threat)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
 	}
 }
 
@@ -4932,6 +5060,7 @@ void City::CalculateBalance()
 		NeedPF = NeedOnRes - NeedPW - NeedPS;
 		KeepEnoughFoodWorkers();
 		KeepMinWoodStoneWorkers();
+		KeepLateGameWorkers();
 	};/*else{
 		word nn=Nat->NPBal;
 		word* pp=Nat->PBalance;
@@ -5260,6 +5389,7 @@ int CheckMinArmyCreationAbility(Brigade* BR)
 			//Fork: fast cavalry gathers for raids (CheckDiversants) instead of marching with the main armies,
 			//also while defending (those armies attack too); at home it still fights (EngageIdleSoldiers)
 			if (i == kRaidArmyType && RaidsEnabled(BR->CT))continue;
+			if (i == kGrenArmyType && GrenSquadsWanted(BR->CT))continue;
 			if (NBMEM[i] >= DefBriMin[i])
 			{
 				return i;
@@ -5271,6 +5401,7 @@ int CheckMinArmyCreationAbility(Brigade* BR)
 		for (int i = 0; i < MaxBT; i++)
 		{
 			if (i == kRaidArmyType && RaidsEnabled(BR->CT))continue;
+			if (i == kGrenArmyType && GrenSquadsWanted(BR->CT))continue;
 			if (NBMEM[i] >= BriMin[i])
 			{
 				return i;
@@ -5638,6 +5769,8 @@ void CheckTopPos(int xc, int yc, int* xd, int* yd)
 	return;
 };
 char* AO_LST = "[AI_Army::LocalSendTo]";
+static const int kArmyArrivedShareNum = 3;//3 of 4 brigades arrived end a step of the march
+static const int kArmyArrivedShareDen = 4;
 bool CheckArmyDanger(AI_Army* ARM);
 void ArmyLocalSendToLink(AI_Army* ARM)
 {
@@ -5676,7 +5809,9 @@ void ArmyLocalSendToLink(AI_Army* ARM)
 		};
 		ps += 5;
 	};
-	if (!NR)
+	//Fork: the step ends once kArmyArrivedShare of the brigades are there (before: all of them), so the army does
+	//not stop at every area of its way waiting for the slowest brigade (walk-pause-walk, user report 2026-10-29)
+	if (!NR || NR * kArmyArrivedShareDen <= (NR + RD) * (kArmyArrivedShareDen - kArmyArrivedShareNum))
 	{
 		ARM->DeleteAOrder();
 		ARM->Parad();
@@ -6112,6 +6247,7 @@ bool CheckArmyDanger(AI_Army* ARM)
 	};
 	return DoBitva;
 };
+static const int kArmyDecisionSteps = 32;
 void ArmyMakeBattleLink(AI_Army* ARM)
 {
 
@@ -6123,7 +6259,8 @@ void ArmyMakeBattleLink(AI_Army* ARM)
 	rando();
 	ARM->SendGrenaders();
 	Army_BTL* OR1 = (Army_BTL*)ARM->AOrder;
-	if ((tmtmt - OR1->time) < 64) return;
+	//Fork: was 64 steps between two decisions, a pause at every step of the march
+	if ((tmtmt - OR1->time) < kArmyDecisionSteps && tmtmt >= OR1->time) return;
 	OR1->time = tmtmt;
 	if (!ARM->NExBrigs) {
 		ARM->ClearArmy();
@@ -6707,31 +6844,30 @@ void Army_Bitva::AddEnemXY(int x, int y, int MyTop, byte msk)
 				int ms = 1 << (id & 7);
 				int of = id >> 3;
 
-				// Проверка, что of в допустимых границах BitMask
-				if (of >= 0 && of < (/* размер BitMask, например */ 1024))
+				//Fork: BitMask covers the first 8192 unit indices only, and units above were skipped: late in a
+				//long game every new soldier has a higher index, the enemy list of the battle stayed empty and
+				//whole armies stood in contact without fighting (AI log 2026-10-29 12:38, P4 at 118:15: 218 of
+				//230 soldiers next to enemies #9020-#10249 idle). Those are looked up in the list instead; the
+				//order keeps its size, so battles in saved games still load.
+				bool known;
+				if (of < int(sizeof(BitMask)))
 				{
-					// Безопасный доступ к BitMask
-					if (!(BitMask[of] & ms))
-					{
-						BitMask[of] |= ms;
-						Enm[NEn] = id;
-						EnSN[NEn] = OB->Serial;
-						int xx = OB->RealX >> 10;
-						int yy = OB->RealY >> 10;
-						if (xx > 0 && yy > 0)
-						{
-							int off = xx + (yy << TopSH);
-							NDang[NEn] = 0; // Можно оставить расчет InflMap, если он нужен
-						}
-						else
-						{
-							NDang[NEn] = 0;
-						}
-						NEn++;
-						if (NEn >= 512) return;
-					}
+					known = (BitMask[of] & ms) != 0;
+					BitMask[of] |= ms;
 				}
-				// Если of вне границ, пропускаем, чтобы не крашить
+				else
+				{
+					known = false;
+					for (int e = 0; e < NEn && !known; e++)known = Enm[e] == id;
+				}
+				if (!known)
+				{
+					Enm[NEn] = id;
+					EnSN[NEn] = OB->Serial;
+					NDang[NEn] = 0;
+					NEn++;
+					if (NEn >= 512) return;
+				}
 			}
 		}
 	}
@@ -7458,11 +7594,76 @@ static void LogRaiders(City* CT)
 }
 #endif
 
+//Fork: a raid ends after kRaidMaxSteps and its riders return to the pool: raids never ended before (their
+//LastEnemyTime is never updated), 164 riders sat in 3 raids from minute 35 to 93, so no new raid could leave
+//while 254 riders waited (AI log 2026-10-29 07:18, P6)
+static const int kRaidMaxSteps = 40 * 300;//5 minutes
+static int g_RaidStartAt[8][MaxArm];
+//Fast cavalry that is not on a raid and not fighting returns to the raid pool about every 10 s: it kept joining
+//the main armies (150-220 riders) and loose brigades (135), where Sich Cossacks are of little use
+static const int kRaiderSweepPeriod = 400;
+static int g_RaiderSweepAt[8];
+static void EndRaid(City* CT, AI_Army* ARM)
+{
+	ARM->ClearZombi();
+	for (int i = 0; i < ARM->NExBrigs; i++)
+	{
+		Brigade* BR = ARM->ExBrigs[i].Brig;
+		if (BR->NMemb)BR->RemoveObjects(BR->NMemb, &CT->Agressors);
+		BR->DeleteAll();
+		BR->Enabled = false;
+	}
+	ARM->ClearArmy();
+	ARM->Enabled = false;
+}
+static void SweepRaiders(City* CT)
+{
+	if (!AIPeriodDue(g_RaiderSweepAt[CT->NI], kRaiderSweepPeriod))return;
+	int moved = 0;
+	int N = NtNUnits[CT->NI];
+	word* units = NatList[CT->NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (!OB || OB->Sdoxlo || OB->Hidden || OB->newMons->Usage != FastHorseID || OB->EnemyID != 0xFFFF)continue;
+		word br = OB->BrigadeID;
+		if (br == 0xFFFF || br == CT->Agressors.ID || br == CT->FreeArmy.ID || br == CT->Guards.ID || br == CT->Defenders.ID)continue;
+		Brigade* BR = CT->Brigs + br;
+		if (BR->ArmyID < MaxArm)
+		{
+			AI_Army* A = CT->ARMS + BR->ArmyID;
+			if (A->Enabled && A->AOrder && A->AOrder->ALink == &A_DiversiaLink)continue;//on a raid
+		}
+		OB->Zombi = false;
+		if (BR->RemoveOne(OB->BrIndex, &CT->Agressors))
+		{
+			OB->DoNotCall = true;
+			moved++;
+		}
+	}
+#ifdef AILOG_ENABLED
+	if (moved)AILog_Event(CT->NI, "RAIDERS-BACK %d fast riders back to the raid pool", moved);
+#endif
+}
+
 void CheckDiversants(City* CT)
 {
 #ifdef AILOG_ENABLED
 	LogRaiders(CT);
 #endif
+	for (int i = 0; i < MaxArm; i++)
+	{
+		AI_Army* A = CT->ARMS + i;
+		if (!(A->Enabled && A->AOrder && A->AOrder->ALink == &A_DiversiaLink))continue;
+		int& at = g_RaidStartAt[CT->NI][i];
+		if (tmtmt >= at && tmtmt - at < kRaidMaxSteps)continue;
+#ifdef AILOG_ENABLED
+		AILog_Event(CT->NI, "RAID-END a raid comes back to the raid pool");
+#endif
+		EndRaid(CT, A);
+	}
+	SweepRaiders(CT);
 	int NDivers = CountRaiders(CT);
 	if (NDivers < RaidSize(CT))return;
 	int NDivArms = 0;
@@ -7481,6 +7682,7 @@ void CheckDiversants(City* CT)
 		AIAR->Enabled = true;
 		AIAR->CreateMinimalArmyFromBrigade(&CT->Agressors, 2);
 		AIAR->Diversia();
+		g_RaidStartAt[CT->NI][aid] = tmtmt;
 		AIAR->Spec = 5;
 		if (CT->NDivr < 255)CT->NDivr++;
 #ifdef AILOG_ENABLED
@@ -7489,6 +7691,110 @@ void CheckDiversants(City* CT)
 		g_RaidSize[CT->NI] = 0;//the next raid gets its own size
 	}
 	BriMax[2] = old;
+}
+
+static int CountArmyType(const Brigade* brigade, int armyType);
+//Fork: grenadier squads (kGrenSquadSize from the raid pool's grenadiers) attack the nearest enemy mine
+static const int kGrenSquadPeriod = 64;//game steps
+static OneObject* NearestEnemyMine(City* CT, int x, int y)
+{
+	OneObject* best = nullptr;
+	int bestD = 0;
+	for (int e = 0; e < 8; e++)
+	{
+		if (NATIONS[e].NMask & CT->Nat->NMask)continue;//itself and allies
+		int N = NtNUnits[e];
+		word* units = NatList[e];
+		for (int i = 0; i < N; i++)
+		{
+			if (units[i] == 0xFFFF)continue;
+			OneObject* OB = Group[units[i]];
+			if (!OB || OB->Sdoxlo || !OB->NewBuilding || OB->newMons->Usage != MineID)continue;
+			int d = Norma((OB->RealX >> 4) - x, (OB->RealY >> 4) - y);
+			if (!best || d < bestD)
+			{
+				best = OB;
+				bestD = d;
+			}
+		}
+	}
+	return best;
+}
+static void DisbandGrenSquad(City* CT, int s)
+{
+	Brigade* BR = CT->Brigs + (g_GrenSquad[CT->NI][s] - 1);
+	if (BR->Enabled)
+	{
+		if (BR->NMemb)BR->RemoveObjects(BR->NMemb, &CT->Agressors);
+		BR->DeleteAll();
+		BR->Enabled = false;
+	}
+	g_GrenSquad[CT->NI][s] = 0;
+}
+static void HandleGrenadierSquads(City* CT)
+{
+	int NI = CT->NI;
+	if (tmtmt < g_GrenSquadAt[NI])memset(g_GrenSquad[NI], 0, sizeof(g_GrenSquad[NI]));//a new or loaded game
+	if (!AIPeriodDue(g_GrenSquadAt[NI], kGrenSquadPeriod))return;
+	for (int s = 0; s < kMaxGrenSquads; s++)
+	{
+		if (!g_GrenSquad[NI][s])continue;
+		Brigade* BR = CT->Brigs + (g_GrenSquad[NI][s] - 1);
+		if (!BR->Enabled || BR->NMemb < kGrenSquadMinAlive)
+		{
+#ifdef AILOG_ENABLED
+			AILog_Event(NI, "GREN-SQUAD %d comes home (%d left)", s + 1, BR->Enabled ? int(BR->NMemb) : 0);
+#endif
+			DisbandGrenSquad(CT, s);
+			continue;
+		}
+		int sx = 0, sy = 0, n = 0;
+		for (int j = 0; j < BR->NMemb; j++)
+		{
+			OneObject* OB = Group[BR->Memb[j]];
+			if (!OB || OB->Serial != BR->MembSN[j] || OB->Sdoxlo)continue;
+			sx += OB->RealX >> 4;
+			sy += OB->RealY >> 4;
+			n++;
+		}
+		if (!n)continue;
+		OneObject* mine = NearestEnemyMine(CT, sx / n, sy / n);
+		if (!mine)
+		{
+#ifdef AILOG_ENABLED
+			AILog_Event(NI, "GREN-SQUAD %d comes home (no enemy mine)", s + 1);
+#endif
+			DisbandGrenSquad(CT, s);
+			continue;
+		}
+		for (int j = 0; j < BR->NMemb; j++)
+		{
+			OneObject* OB = Group[BR->Memb[j]];
+			if (!OB || OB->Serial != BR->MembSN[j] || OB->Sdoxlo)continue;
+			if (!OB->LocalOrder || OB->EnemyID != mine->Index)OB->AttackObj(mine->Index, 128 + 16, 0);
+		}
+	}
+	if (!GrenadiersEnabled(CT))return;
+	for (int s = 0; s < kMaxGrenSquads; s++)
+	{
+		if (g_GrenSquad[NI][s])continue;
+		if (CountArmyType(&CT->Agressors, kGrenArmyType) < kGrenSquadSize)return;
+		int b = CT->GetFreeBrigade();
+		if (b == -1)return;
+		Brigade* BR = CT->Brigs + b;
+		BR->Enabled = true;
+		int moved = 0;
+		for (int j = CT->Agressors.NMemb - 1; j >= 0 && moved < kGrenSquadSize; j--)
+		{
+			OneObject* OB = Group[CT->Agressors.Memb[j]];
+			if (!OB || OB->Serial != CT->Agressors.MembSN[j] || ArmType[OB->Usage] != kGrenArmyType)continue;
+			if (CT->Agressors.RemoveOne(j, BR))moved++;
+		}
+		g_GrenSquad[NI][s] = b + 1;
+#ifdef AILOG_ENABLED
+		AILog_Event(NI, "GREN-SQUAD %d of %d grenadiers leaves for the enemy mines", s + 1, moved);
+#endif
+	}
 }
 
 //------------------------------MAIN STRATEGICAL BRAIN---------------------------//
@@ -7583,6 +7889,7 @@ void SmartGamer(City* CT)
 	};
 	//-------------------------------------
 	if (RaidsEnabled(CT))CheckDiversants(CT);
+	HandleGrenadierSquads(CT);
 	//Fork: the base threat is counted unit by unit (ScanBaseThreat), every kBaseThreatScanPeriod steps
 	if (CT->AI_TOWN_DEFENCE && AIPeriodDue(g_BaseScanAt[CT->NI], kBaseThreatScanPeriod))
 	{

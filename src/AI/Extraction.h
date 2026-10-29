@@ -4,6 +4,9 @@
 #define AI_OPTIONAL_CENTERS_COST_PERCENT 75
 #define AI_KAZ18_MAX                     1000 // 18c barracks: no practical count limit beyond the first 3
 #define AI_KAZ18_COST_PERCENT            90   // 18c barracks are the AI's key military building
+#define AI_KAZ18_RICH_FROM               5    // from this many 18c barracks on: up to AI_KAZ18_RICH_COST_PERCENT (user request)
+#define AI_KAZ18_RICH_COST_PERCENT       95
+#define AI_PEASANTS_MAX                  2500 // was 1500: 1,260 in the mines left 245 for wood, stone and food
 #define AI_XVIII_COST_PERCENT            98   // unchanged value, but now proposed first (top of Buildings)
 #define AI_OPTIONAL_STOREHOUSES          4    // Storehouses 2..4 next to the optional Town Centres
 #define AI_OPTIONAL_STOREHOUSES_COST_PERCENT 50
@@ -30,6 +33,10 @@
 #define AI_SOLDIERS_PER_PEASANT          3    // no new infantry while there are more per peasant: the army starved the economy
 #define AI_RICH_MAX                      1000 // a rich AI builds more Town Centres and Stables than the fixed counts below,
 #define AI_RICH_COST_PERCENT             20   // one more whenever it costs at most this share of the stockpile
+#define AI_LATE_KAZ17_FROM               6    // from this many 17c barracks on, one more only out of surplus: they cost 300k gold each
+#define AI_LATE_KAZ17_COST_PERCENT       20   // and took the gold the next 18c barracks needed (25 of them, user report 2026-10-29)
+#define AI_LATE_STABLE_FROM_KAZ18        6    // with this many 18c barracks more Stables may cost up to AI_LATE_STABLE_COST_PERCENT:
+#define AI_LATE_STABLE_COST_PERCENT      50   // the 7th costs 224k wood, at 20% it never came before the 17c barracks (user request)
 // Fork: one church per Town Centre (at least 1), at most AI_CHURCHES_MAX
 int ChurchTarget(){
 	int n = GetUnits(&CENTER);
@@ -334,7 +341,7 @@ void Buildings(){
 	TryUpgrade(&XVIII, AI_XVIII_COST_PERCENT, 100);
 	
 	TryUnit(&KAZ18, 3, 100, 100);
-	TryUnit(&KAZ18, AI_KAZ18_MAX, AI_KAZ18_COST_PERCENT, 100);
+	TryUnit(&KAZ18, AI_KAZ18_MAX, GetUnits(&KAZ18)<AI_KAZ18_RICH_FROM ? AI_KAZ18_COST_PERCENT : AI_KAZ18_RICH_COST_PERCENT, 100);
 
 /*	if(GetReadyUnits(&DIPCENTER)){
 		TryUnit(&MELN, 2, 100, 100);
@@ -388,7 +395,7 @@ void Buildings(){
 	TryUnit(&STABLE, 3, 100, 100);
 	// Fork: with resources to spare, no fixed limit (they stopped at 5-6 with millions in stock)
 	TryUnit(&CENTER, AI_RICH_MAX, AI_RICH_COST_PERCENT, 100);
-	TryUnit(&STABLE, AI_RICH_MAX, AI_RICH_COST_PERCENT, 100);
+	TryUnit(&STABLE, AI_RICH_MAX, GetUnits(&KAZ18)>=AI_LATE_STABLE_FROM_KAZ18 ? AI_LATE_STABLE_COST_PERCENT : AI_RICH_COST_PERCENT, 100);
 //	if(GetUnits(&KAZ18))
 
 //	if(UpgIsDone(&AKASBUIL))
@@ -426,7 +433,7 @@ void Buildings(){
 		TryUnit(&CENTER, 6, 100, 100);
 //		if(GetReadyUnits(&CENTER)<6) return;
 
-		if(GetUnits(&KAZ18)>=6) TryUnit(&KAZ17,GetUnits(&KAZ17)+1,100,100);
+		if(GetUnits(&KAZ18)>=6) TryUnit(&KAZ17,GetUnits(&KAZ17)+1,GetUnits(&KAZ17)<AI_LATE_KAZ17_FROM ? 100 : AI_LATE_KAZ17_COST_PERCENT,100);
 	}
 };
 
@@ -439,7 +446,7 @@ void Units(){
 
 	// Produce
 	for(int i=0; i<2; i++){
-		TryUnit(&PEASANT, 1500, GetUnits(&PEASANT)<AI_PEASANTS_FIRST ? AI_PEASANTS_FIRST_COST_PERCENT : 20, 100);
+		TryUnit(&PEASANT, AI_PEASANTS_MAX, GetUnits(&PEASANT)<AI_PEASANTS_FIRST ? AI_PEASANTS_FIRST_COST_PERCENT : 20, 100);
 //---added--------------------------------------
 //		if(GetPeaceTimeLeft()<=GetMaxPeaceTime()/2+GetMaxPeaceTime()/5 || GetReadyUnits(&KAZ18)>0){
 		if(GetPeaceTimeLeft()<=20 && GetUnits(&INFANTRY)<=GetUnits(&PEASANT)*AI_SOLDIERS_PER_PEASANT){
@@ -831,7 +838,7 @@ void BuildingsMillions(){
 		TryUnit(&ARTDEPO, AI_ARTDEPO_MAX, 100, 100);
 
 	if(GetUnits(&KAZ18)>5){
-		TryUnit(&KAZ17,GetUnits(&KAZ17)+1,100,100);
+		TryUnit(&KAZ17,GetUnits(&KAZ17)+1,GetUnits(&KAZ17)<AI_LATE_KAZ17_FROM ? 100 : AI_LATE_KAZ17_COST_PERCENT,100);
 		TryUnit(&STABLE,9,100,100);
 	};
 };
@@ -1059,7 +1066,7 @@ void ExtrMillions(){
 
 	DefenceStateMillions();
 	BuildingsMillions();
-	for(int i=0; i<2; i++) TryUnit(&PEASANT, 1500, 20, 100);
+	for(int i=0; i<2; i++) TryUnit(&PEASANT, AI_PEASANTS_MAX, 20, 100);
 //  if(GetPeaceTimeLeft()<=GetMaxPeaceTime()-15||GetPeaceTimeLeft()<=15){
 	if(GetPeaceTimeLeft()<=15){
 		for(int i=0; i<2; i++){

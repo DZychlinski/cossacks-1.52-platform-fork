@@ -49,3 +49,10 @@ Computer players leave room around their mills for the fields.
 Computer players build towers on high ground when they can.
 Computer players trade surplus stone and gold for food and wood when they run short, and surplus stone and wood for gold.
 Computer players keep training soldiers while their army is small or their base is attacked, even when saving for an upgrade.
+Computer players build towers again (none were built in long games).
+Computer raids come home after 5 minutes, fast cavalry stays out of the main armies, and fast cavalry and artillery help defend the base.
+Computer players train grenadiers late in the game and send small squads to destroy enemy mines.
+Computer players take mines across the whole map late in the game and keep more peasants on wood and stone.
+Computer armies march with fewer pauses.
+Computer players save for more 18th-century barracks instead of building ever more 17th-century ones, and build more stables late in the game.
+Computer armies fight back late in long games (with more than about 8,000 units and buildings on the map they stood still next to the enemy).

@@ -68,7 +68,7 @@ void MainScript(){
 void LandScript00(){
 	// produce units
 	for(i=0; i<2; i++){
-		TryUnit(&PEASANT, 2000, 20, 100);		
+		TryUnit(&PEASANT, AI_PEASANTS_MAX, 20, 100);		
 		TryUnit(&INFANTRY, 2000, 20, 100);
 		if(GetUnits(&INFANTRY)>250){			
 			TryUnit(&STREL17, 500, 20, 40);
@@ -343,7 +343,7 @@ void LandScript01(){
 
 	// produce units
 	for(i=0; i<3; i++){
-		TryUnit(&PEASANT, 2000, 20, 100);
+		TryUnit(&PEASANT, AI_PEASANTS_MAX, 20, 100);
 		TryUnit(&INFANTRY, 2000, 20, 50);
 		if(GetUnits(&INFANTRY)>200){
 			TryUnit(&STREL17, 500, 20, 80);
@@ -599,7 +599,7 @@ void LandScript03(){	//For T
 
 	// produce units
 	for(i=0; i<2; i++){
-		TryUnit(&PEASANT, 2000, 20, 100);		
+		TryUnit(&PEASANT, AI_PEASANTS_MAX, 20, 100);		
 		if(GetUnits(&INFANTRY)>250){
 			TryUnit(&INFANTRY, 2000, 20, 40);
 			TryUnit(&STREL17, 500, 20, 80);

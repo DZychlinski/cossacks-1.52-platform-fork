@@ -3240,9 +3240,22 @@ void Brigade_Bitva::AddEnemXY( int x, int y, int MyTop, byte mask )
 					int id = OB->Index;
 					int ms = 1 << ( id & 7 );
 					int of = id >> 3;
-					if ( !( BitMask[of] & ms ) )
+					//Fork: BitMask covers the first 8192 unit indices only; above it the bit was written into the
+					//enemy list behind it (and past the order for indices from 28672), corrupting the battle late in
+					//long games. Those are looked up in the list instead; the order keeps its size for saved games.
+					bool known;
+					if ( of < int( sizeof( BitMask ) ) )
 					{
+						known = ( BitMask[of] & ms ) != 0;
 						BitMask[of] |= ms;
+					}
+					else
+					{
+						known = false;
+						for ( int e = 0; e < NEn && !known; e++ )known = Enm[e] == id;
+					}
+					if ( !known )
+					{
 						Enm[NEn] = id;
 						EnSN[NEn] = OB->Serial;
 						int xx = OB->RealX >> 10;
