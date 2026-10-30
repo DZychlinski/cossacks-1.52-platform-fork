@@ -60,5 +60,7 @@ Computer players build extra Town Centres only after their barracks and Stables.
 Computer raids look for targets across the whole map instead of waiting in the base, and keep riding to them.
 Computer players build up to 20 towers in the 18th century, more slowly after the 10th.
 Computer raids follow the capture option: without capture they hunt peasants instead of standing next to buildings.
-With the new lobby option "Allow AI to build walls", computer players enclose their base in one large stone wall with gates that close while enemies are near.
+With the new lobby option "Allow AI to build walls", computer players enclose their base in one large stone wall with gates that close while any enemy is near.
 Computer players research both stone mining upgrades and stop buying gold, iron or coal once 150 peasants work in their mines of it; they keep 20,000 stone and stop trading it away for wood they already have plenty of.
+Computer players research the Academy's artillery upgrades, then heal their artillery and units every minute.
+Computer players in the 18th century buy resources that ran short (stone first) with what they have in abundance.

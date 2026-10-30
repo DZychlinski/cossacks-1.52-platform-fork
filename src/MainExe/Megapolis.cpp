@@ -1685,6 +1685,87 @@ static int AddGrenadierUpgrades(City* city, int projectCount)
 	return AddBestProject(city, projectCount, PickUnitUpgrade(city, GrenaderID, kGrenUpgradeCostPercent));
 }
 
+//Fork: the Academy's artillery upgrades. The land scripts propose none of them (only the sea scripts propose AKA20,
+//and no script registers the others), so the AI never researched them. From the first 18th-century barracks the
+//cheapest one on offer costing at most kArtUpgradeCostPercent of the stock is proposed about every
+//kArtUpgradePeriod game steps. Once all of them are done, the two healing upgrades are proposed every kHealPeriod
+//steps. Upgrades are matched by code (NewUpgrade::Name is the code plus the two-letter nation suffix)
+struct CodedUpgrade
+{
+	const char* Code;
+	const char* Effect;
+};
+static const CodedUpgrade kArtilleryUpgrades[] =
+{
+	{ "AKA16", "artillery range +5%" },
+	{ "AKA17", "artillery range +10% (unicorn, carronade)" },
+	{ "AKA18", "artillery durability +150% (Gribeauval)" },
+	{ "AKA19", "multi-barrelled cannon" },
+	{ "AKA20", "artillery accuracy +35% (sighting devices)" },
+	{ "AKA27", "artillery accuracy +35% (mathematics)" },
+};
+static const CodedUpgrade kHealUpgrades[] =
+{
+	{ "AKA21", "repairs all artillery" },
+	{ "AKA26", "heals all living units" },
+};
+static const size_t kUpgradeCodeNameLen = 7;
+static const int kArtUpgradeCostPercent = 50;
+static const int kArtUpgradePeriod = 400;   //10 s
+static const int kHealCostPercent = 50;
+static const int kHealPeriod = 2400;        //a minute
+static int g_ArtUpgradeAt[8];
+static int g_HealAt[8];
+static bool UpgradeHasCode(const NewUpgrade* NU, const char* code)
+{
+	return NU->Name && strlen(NU->Name) == kUpgradeCodeNameLen && !strncmp(NU->Name, code, strlen(code));
+}
+//The cheapest proposed upgrade with one of the codes costing at most maxPercent of the stock, -1 if none
+static int PickCodedUpgrade(City* city, const CodedUpgrade* codes, int n, int maxPercent)
+{
+	Nation* nation = city->Nat;
+	int best = -1;
+	for (int i = 0; i < city->NProp; i++)
+	{
+		ProposedProject* P = city->Prop + i;
+		if (P->PKind != 1 || P->NIndex >= nation->NUpgrades || P->Percent > maxPercent)continue;
+		if (best != -1 && P->Percent >= city->Prop[best].Percent)continue;
+		for (int c = 0; c < n; c++)
+		{
+			if (UpgradeHasCode(nation->UPGRADE[P->NIndex], codes[c].Code))
+			{
+				best = i;
+				break;
+			}
+		}
+	}
+	return best;
+}
+static bool CodedUpgradesDone(Nation* nation, const CodedUpgrade* codes, int n)
+{
+	for (int u = 0; u < nation->NUpgrades; u++)
+	{
+		NewUpgrade* NU = nation->UPGRADE[u];
+		if (NU->Done)continue;
+		for (int c = 0; c < n; c++)if (UpgradeHasCode(NU, codes[c].Code))return false;
+	}
+	return true;
+}
+static int AddArtilleryUpgrades(City* city, int projectCount)
+{
+	if (projectCount >= 126 || CountCenturyBarracks(city) < 1)return projectCount;
+	const int nArt = sizeof(kArtilleryUpgrades) / sizeof(kArtilleryUpgrades[0]);
+	if (!CodedUpgradesDone(city->Nat, kArtilleryUpgrades, nArt))
+	{
+		if (!AIPeriodDue(g_ArtUpgradeAt[city->NI], kArtUpgradePeriod))return projectCount;
+		return AddBestProject(city, projectCount, PickCodedUpgrade(city, kArtilleryUpgrades, nArt, kArtUpgradeCostPercent));
+	}
+	if (!AIPeriodDue(g_HealAt[city->NI], kHealPeriod))return projectCount;
+	for (const CodedUpgrade& heal : kHealUpgrades)
+		projectCount = AddBestProject(city, projectCount, PickCodedUpgrade(city, &heal, 1, kHealCostPercent));
+	return projectCount;
+}
+
 word City::FindNeedProject()
 {
 	//Groups calculating
@@ -1706,6 +1787,7 @@ word City::FindNeedProject()
 		n = AddRaiderUpgrades(this, n);
 		n = AddGrenadierTraining(this, n);
 		n = AddGrenadierUpgrades(this, n);
+		n = AddArtilleryUpgrades(this, n);
 		NBestProjects = n;
 		return n;
 	};
@@ -7991,11 +8073,11 @@ static const int kWallMinRunCells = 8;        //shorter runs wait for stone unle
 static const int kWallEnemyClearPx = 1536;
 static const byte kWallSpriteHorizontal = 2;  //WallCell::Sprite of a straight cell (GetDir8 & 3)
 static const byte kWallSpriteVertical = 0;
-//Gates close while enemy soldiers are within kGateCloseEnemyPx and open again once none are within
-//kGateOpenEnemyPx; a gate never closes on own units within kGateDoorwayPx (closing gates kill units in them)
-static const int kGateCloseEnemyPx = 300;//only enemies at the gate: a battle near the wall must not shut out reinforcements
-static const int kGateOpenEnemyPx = 450;
-static const int kGateDoorwayPx = 128;
+//Gates close while any enemy unit is within kGateCloseEnemyPx and open again once none is within kGateOpenEnemyPx.
+//They close even on own units in the doorway (a closing gate kills them): waiting for the doorway to clear let
+//whole raids in behind the riders chasing them
+static const int kGateCloseEnemyPx = 600;
+static const int kGateOpenEnemyPx = 800;
 static const int kWallMaxGates = 64;
 //Gates are checked every kGatePeriod game steps (each AI pass): checked with the rest of the wall work, fast
 //riders crossed the closing distance between two checks and the gate stayed open behind them. Only units within
@@ -8242,18 +8324,16 @@ static WallCell* GateCell(OneObject* OB)
 	return LI >= 0 && LI < MaxLI ? WRefs[LI] : nullptr;
 }
 
-//Closes the gates with enemy soldiers near (not on own units in the doorway) and opens the others; returns the
+//Closes the gates with enemy units near and opens the others; returns the
 //number of closed gates
 static int ControlWallGates(City* CT, const AIWallPlan& P, OneObject** gateOB, int n)
 {
 	if (!n)return 0;
 	bool enemyClose[kWallMaxGates] = {};
 	bool enemyNear[kWallMaxGates] = {};
-	bool ownInDoor[kWallMaxGates] = {};
 	for (int e = 0; e < 8; e++)
 	{
-		bool own = e == CT->NI;
-		if (!own && (NATIONS[e].NMask & CT->Nat->NMask))continue;//allies
+		if (NATIONS[e].NMask & CT->Nat->NMask)continue;//itself and allies
 		int N = NtNUnits[e];
 		word* units = NatList[e];
 		for (int u = 0; u < N; u++)
@@ -8261,7 +8341,6 @@ static int ControlWallGates(City* CT, const AIWallPlan& P, OneObject** gateOB, i
 			if (units[u] == 0xFFFF)continue;
 			OneObject* OB = Group[units[u]];
 			if (!OB || OB->Sdoxlo || OB->NewBuilding || OB->Wall)continue;
-			if (!own && OB->newMons->Peasant)continue;
 			int x = OB->RealX >> 4;
 			int y = OB->RealY >> 4;
 			if (x < P.MinX - kGateUnitMarginPx || x > P.MaxX + kGateUnitMarginPx ||
@@ -8269,11 +8348,7 @@ static int ControlWallGates(City* CT, const AIWallPlan& P, OneObject** gateOB, i
 			for (int g = 0; g < n; g++)
 			{
 				int d = Norma(x - (gateOB[g]->RealX >> 4), y - (gateOB[g]->RealY >> 4));
-				if (own)
-				{
-					if (d < kGateDoorwayPx)ownInDoor[g] = true;
-				}
-				else if (d < kGateOpenEnemyPx)
+				if (d < kGateOpenEnemyPx)
 				{
 					enemyNear[g] = true;
 					if (d < kGateCloseEnemyPx)enemyClose[g] = true;
@@ -8287,7 +8362,7 @@ static int ControlWallGates(City* CT, const AIWallPlan& P, OneObject** gateOB, i
 		WallCell* W = GateCell(gateOB[g]);
 		if (!W)continue;
 		bool locked = Gates[W->GateIndex].Locked != 0;
-		if (!locked && enemyClose[g] && !ownInDoor[g])
+		if (!locked && enemyClose[g])
 		{
 			CloseGates(gateOB[g]);
 			locked = true;
@@ -8387,6 +8462,75 @@ static void HandleAIWalls(City* CT)
 #endif
 }
 
+//Fork: market recovery of resources that ran short. From the 18th century, once every kRecoverPeriod steps, with a
+//market, each resource below its kRecoverNeeded stock is bought up to about kRecoverAmount by selling resources above
+//kRecoverDonorKeep in the order of kRecoverDonors (each kept at kRecoverDonorKeep). Walls' upkeep, raids on the
+//peasants and few of them on stone left the AI without stone for its military buildings while the others piled up
+int ForkMarketTrade(byte NI, int SellID, int BuyID, int SellAmount);
+static const int kRecoverPeriod = 2400;      //a minute
+static const int kRecoverAmount = 50000;
+static const int kRecoverDonorKeep = 200000;
+static const int kRecoverChunk = 10000;      //sold per trade: the rate worsens with each trade
+struct RecoverNeed
+{
+	int* Res;
+	int Below;
+	const char* Reason;
+};
+static const RecoverNeed kRecoverNeeded[] =//bought in this order
+{
+	{ &StoneID, 20000, "military buildings, towers, walls and their upkeep" },
+	{ &FoodID, 30000, "a large army eats it fast, and units die without it" },
+	{ &TreeID, 20000, "buildings" },
+	{ &GoldID, 20000, "18th-century units and upgrades" },
+	{ &IronID, 20000, "units and shots" },
+	{ &CoalID, 20000, "shots" },
+};
+static int* const kRecoverDonors[] = { &CoalID, &IronID, &FoodID, &TreeID, &GoldID };
+static int g_RecoverAt[8];
+static bool HasMarket(City* CT)
+{
+	int N = NtNUnits[CT->NI];
+	word* units = NatList[CT->NI];
+	for (int i = 0; i < N; i++)
+	{
+		if (units[i] == 0xFFFF)continue;
+		OneObject* OB = Group[units[i]];
+		if (OB && !OB->Sdoxlo && OB->Ready && OB->newMons->Rinok)return true;
+	}
+	return false;
+}
+static void RecoverShortResources(City* CT)
+{
+	if (!AIPeriodDue(g_RecoverAt[CT->NI], kRecoverPeriod))return;
+	byte NI = CT->NI;
+	if (!CenturyDone(CT->Nat) || !HasMarket(CT))return;
+	for (const RecoverNeed& N : kRecoverNeeded)
+	{
+		int* need = N.Res;
+		if (XRESRC(NI, *need) >= N.Below)continue;
+		int bought = 0, sold = 0;
+		for (int* donor : kRecoverDonors)
+		{
+			if (*donor == *need)continue;
+			while (bought < kRecoverAmount)
+			{
+				int spare = XRESRC(NI, *donor) - kRecoverDonorKeep;
+				if (spare <= 0)break;
+				int sell = spare < kRecoverChunk ? spare : kRecoverChunk;
+				int got = ForkMarketTrade(NI, *donor, *need, sell);
+				if (got <= 0)break;
+				bought += got;
+				sold += sell;
+			}
+			if (bought >= kRecoverAmount)break;
+		}
+#ifdef AILOG_ENABLED
+		if (bought)AILog_Event(NI, "MARKET-RECOVER %d %s bought for %d of resources above %d", bought, AILog_ResName(*need), sold, kRecoverDonorKeep);
+#endif
+	}
+}
+
 //------------------------------MAIN STRATEGICAL BRAIN---------------------------//
 void SHIP_DIVERSIA(AI_Army* ARM);
 
@@ -8482,6 +8626,7 @@ void SmartGamer(City* CT)
 	HandleGrenadierSquads(CT);
 	HandleAIWalls(CT);
 	HandleAIGates(CT);
+	RecoverShortResources(CT);
 	//Fork: the base threat is counted unit by unit (ScanBaseThreat), every kBaseThreatScanPeriod steps
 	if (CT->AI_TOWN_DEFENCE && AIPeriodDue(g_BaseScanAt[CT->NI], kBaseThreatScanPeriod))
 	{

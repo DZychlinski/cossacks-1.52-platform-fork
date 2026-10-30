@@ -237,6 +237,21 @@ int EcoResEngineID( byte EcoRes )
 	return EcoRes < 6 ? ECO.EcResID[EcoRes] : -1;
 }
 
+//Fork: a market trade by engine resource IDs (the AI's resource recovery); returns the amount bought
+int ForkMarketTrade( byte NI, int SellID, int BuyID, int SellAmount )
+{
+	int sell = -1, buy = -1;
+	for ( int i = 0; i < 6; i++ )
+	{
+		if ( ECO.EcResID[i] == SellID )sell = i;
+		if ( ECO.EcResID[i] == BuyID )buy = i;
+	}
+	if ( sell < 0 || buy < 0 )return 0;
+	int before = XRESRC( NI, BuyID );
+	ECO.PerformOperation( NI, byte( sell ), byte( buy ), SellAmount );
+	return XRESRC( NI, BuyID ) - before;
+}
+
 void ReloadECO()
 {
 	ECO.Load();
