@@ -10678,6 +10678,43 @@ void SearchEnemyForAIArtillery( OneObject* OB )
 	}
 }
 
+//Fork: a mortar with nothing else to shoot shells the nearest enemy wall cell in its range. The enemy wall list
+//(EnemyInfo::CreateWallsList) holds only cells whose two sides are far apart by way; around a gate they are not,
+//so mortars stood idle next to a wall with gates while archers shot at it
+static const int kMortarWallMarginPx = 100;   //stay a little inside the range
+static void ShellNearestEnemyWall( OneObject* OB )
+{
+	AdvCharacter* ADC = OB->Ref.General->MoreCharacter;
+	int rMax = int( ADC->MaxR_Attack ) - kMortarWallMarginPx;
+	int rMin = int( ADC->MinR_Attack ) + kMortarWallMarginPx;
+	if ( rMax <= rMin )return;
+	int xxx = OB->RealX >> 4;
+	int yyy = OB->RealY >> 4;
+	int r = rMax >> 6;
+	int cx = xxx >> 6;
+	int cy = yyy >> 6;
+	int best = -1;
+	int bx = 0, by = 0;
+	for ( int y = cy - r; y <= cy + r; y++ )
+	{
+		if ( y < 0 || y >= MaxLIY )continue;
+		for ( int x = cx - r; x <= cx + r; x++ )
+		{
+			if ( x < 0 || x >= MaxLIX )continue;
+			WallCell* WC = WRefs[GetLI( x, y )];
+			if ( !WC || WC->OIndex == 0xFFFF || ( NATIONS[WC->NI].NMask & OB->NMask ) )continue;
+			int px = ( x << 6 ) + 32;
+			int py = ( y << 6 ) + 32;
+			int d = Norma( px - xxx, py - yyy );
+			if ( d < rMin || d > rMax || ( best != -1 && d >= best ) )continue;
+			best = d;
+			bx = px;
+			by = py;
+		}
+	}
+	if ( best != -1 )OB->AttackPoint( bx, by, GetHeight( bx, by ) + 5, 1, ATTP_IMMEDIATECHECK, 1 );
+}
+
 void SearchEnemyForMortira( OneObject* OB )
 {
 	if ( OB->delay )
@@ -10756,6 +10793,10 @@ void SearchEnemyForMortira( OneObject* OB )
 	if ( MaxDif > 5 )
 	{
 		OB->AttackPoint( EnX, EnY, GetHeight( EnX, EnY ) + 32, 1, ATTP_IMMEDIATECHECK, 1 );
+	}
+	else
+	{
+		ShellNearestEnemyWall( OB );
 	};
 };
 void AIArtilleryAgainstTowers( OneObject* OB )

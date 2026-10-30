@@ -1,4 +1,4 @@
-//Encodes 10 given option values into a 7-digit number for map name
+//Encodes 11 given option values into a 7-digit number for map name (8 digits with the Fork's AI walls option)
 //Reason: fixed network buffer size with limited mapname space
 int EncodeOptionsInNumber( int *selected_opt_values )
 {
@@ -15,6 +15,7 @@ int EncodeOptionsInNumber( int *selected_opt_values )
 	int dip_opts = selected_opt_values[7];
 	int shipyard_opts = selected_opt_values[8];
 	int market_opts = selected_opt_values[9];
+	int ai_walls_opts = selected_opt_values[10];//Fork: 0 or 1, the 8th digit
 
 	bool no_artillery = false;
 	if (3 == cannons_opts)
@@ -34,19 +35,20 @@ int EncodeOptionsInNumber( int *selected_opt_values )
 	{
 		result += 4000000;
 	}
+	result += 10000000 * ai_walls_opts;
 
 	return result;
 }
 
 //Decodes 7-digit number into game settings
-//Saves settings values in result[10]
+//Saves settings values in result[11]
 //Returns 'Start options' value
 int DecodeOptionsFromNumber( const int number, int *result )
 {
 	//Separate digits in number (starting with last)
-	int digits[7] = { 0 };
+	int digits[8] = { 0 };
 	digits[0] = number % 10;
-	for (int i = 1, divisor = 10; i < 7; i++)
+	for (int i = 1, divisor = 10; i < 8; i++)
 	{
 		digits[i] = ( number / divisor ) % 10;
 		divisor *= 10;
@@ -74,6 +76,7 @@ int DecodeOptionsFromNumber( const int number, int *result )
 	result[7] = dip_opts;
 	result[8] = shipyard_opts;
 	result[9] = market_opts;
+	result[10] = digits[7] ? 1 : 0;
 
 	return start_opts;
 }

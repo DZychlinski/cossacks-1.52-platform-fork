@@ -1621,17 +1621,19 @@ static int AddRaiderUpgrades(City* city, int projectCount)
 	return AddBestProject(city, projectCount, PickUnitUpgrade(city, FastHorseID, kRaiderUpgradeCostPercent));
 }
 
-//Fork: from the third 18th-century barracks the AI trains grenadiers, researches their upgrades and sends squads
-//of kGrenSquadSize against enemy mines (HandleGrenadierSquads); while a squad is missing, grenadiers do not
-//join the main armies (CheckMinArmyCreationAbility).
-static const int kGrenadierBarracks = 3;
-static const int kGrenSquadSize = 25;
-static const int kMaxGrenSquads = 2;
-static const int kGrenSquadMinAlive = 5;     //fewer left: the squad goes home
-static const int kGrenadiersWanted = kGrenSquadSize * kMaxGrenSquads;//trained on top of the scripts while fewer
-static const int kGrenTrainPeriod = 80;      //game steps between two grenadiers
-static const int kGrenCostPercent = 20;      //as the scripts' other units
-static const int kGrenUpgradeCostPercent = 50;
+//Fork: from the second 18th-century barracks the AI trains grenadiers, researches their upgrades and sends squads
+//of kGrenSquadMin to kGrenSquadMax against enemy mines, breaking enemy walls on the way (HandleGrenadierSquads); while a squad is missing, grenadiers do not
+//join the main armies (CheckMinArmyCreationAbility). Grenadiers break walls, so they get a larger share of
+//the stock than the scripts' other units.
+static const int kGrenadierBarracks = 2;
+static const int kGrenSquadMin = 100;
+static const int kGrenSquadMax = 150;
+static const int kMaxGrenSquads = 5;
+static const int kGrenSquadMinAlive = 20;    //fewer left: the squad goes home
+static const int kGrenadiersWanted = kGrenSquadMax * kMaxGrenSquads;//trained on top of the scripts while fewer
+static const int kGrenTrainPeriod = 40;      //game steps between two grenadiers
+static const int kGrenCostPercent = 30;      //the scripts' other units: 20
+static const int kGrenUpgradeCostPercent = 70;
 static const int kGrenArmyType = 6;          //ArmType of GRENADER units
 static int g_GrenTrainAt[8];
 static int g_GrenUpgradeAt[8];
@@ -2994,38 +2996,50 @@ static MinePlanResult ForkMinePlan(City* CT)
 	return R;
 }
 
-//Fork: once kGoldMinersEnough peasants work in gold mines, the AI sells wood and stone for gold only above
-//kKeepWoodStone of each. The scripts sold everything above 200,000 for gold, about 10:1 late in the game,
-//and never kept enough for Town Centres (the most
-//expensive European one costs about 510,000) or more Stables and barracks.
-static const int kGoldMinersEnough = 150;
-static const int kKeepWoodStone = 600000;
-static int CountGoldMiners(City* CT)
+//Peasants working in the nation's mines of resource res
+static int CountMiners(City* CT, int res)
 {
 	int n = 0;
 	for (MineBase* MBS = (MineBase*)CT->SearchInform(0x4519, NULL); MBS; MBS = (MineBase*)CT->SearchInform(0x4519, MBS))
 	{
 		OneObject* OB = Group[MBS->M_ID];
-		if (OB && OB->Serial == MBS->M_SN && OB->NNUM == CT->Nat->NNUM && MBS->ResKind == GoldID)n += OB->NInside;
+		if (OB && OB->Serial == MBS->M_SN && OB->NNUM == CT->Nat->NNUM && MBS->ResKind == res)n += OB->NInside;
 	}
 	return n;
 }
 
 //AI_Torg (ActiveScenary.cpp): the amount of SellRes the AI may sell for BuyRes (engine resource IDs)
+//Fork: nothing is bought for a mine resource (gold, iron, coal) while kMinersEnoughToBuy peasants work in its mines:
+//they bring enough, and the scripts paid with the wood and stone that Town Centres (the most expensive European one
+//costs about 510,000), barracks and walls need, about 10:1 for gold late in the game.
 //No trades at all while gold, iron, coal and food are all above kRichStock: late in the game the AI would trade wood and
 //stone away and could not pay for the next Town Centre or barracks
 static const int kRichStock = 100000;
 static int* const kRichStockRes[] = { &GoldID, &IronID, &CoalID, &FoodID };
+static const int kMinersEnoughToBuy = 150;
+//Nothing is bought of a resource the AI already has kPlentyStock of: with more than 200,000 wood the scripts sold
+//5,000 stone for wood on every call (Extraction.h, "Wood to Gold") until no stone was left. Stone is sold only
+//above kKeepStone: Town Centres, barracks, houses, towers and walls need it, and an AI without stone stopped
+//building at its population limit
+static const int kPlentyStock = 100000;
+static const int kKeepStone = 20000;
+static int* const kMineRes[] = { &GoldID, &IronID, &CoalID };
 int ForkLimitAISale(City* CT, int SellRes, int BuyRes, int SellAmount)
 {
 	bool rich = true;
 	for (int* res : kRichStockRes)if (XRESRC(CT->Nat->NNUM, *res) < kRichStock)rich = false;
 	if (rich)return 0;
-	if (BuyRes != GoldID || (SellRes != TreeID && SellRes != StoneID))return SellAmount;
-	if (CountGoldMiners(CT) < kGoldMinersEnough)return SellAmount;
-	int spare = XRESRC(CT->Nat->NNUM, SellRes) - kKeepWoodStone;
-	if (spare <= 0)return 0;
-	return SellAmount < spare ? SellAmount : spare;
+	for (int* res : kMineRes)if (BuyRes == *res && CountMiners(CT, BuyRes) >= kMinersEnoughToBuy)return 0;
+	int NI = CT->Nat->NNUM;
+	int have = XRESRC(NI, BuyRes);
+	if (have >= kPlentyStock)return 0;
+	if (SellRes == StoneID)
+	{
+		int spare = XRESRC(NI, StoneID) - kKeepStone;
+		if (spare <= 0)return 0;
+		if (SellAmount > spare)SellAmount = spare;
+	}
+	return SellAmount;
 }
 
 //Upgrade that starts the 18th century: NewUpgrade::Name is "MAIN" + two-letter nation code (as in AILog.cpp)
@@ -4894,9 +4908,16 @@ static const int kBaseThreatMinUnits = 15; //before: more than 50
 //Home soldiers already walking somewhere (back to their post, to the threat) answer an enemy this close.
 //They skipped every check while they had an order and walked on while shooters killed them.
 static const int kAIEngageWalkingRadius = 600;//px, about musket range
+//Defenders go to the nearest kBaseThreatCellShift cell holding threat enemies, not to the centre of them all: with two
+//enemy groups the centre was empty ground between them, where the defenders stood in a clump with nobody in reach
+static const int kBaseThreatMaxPoints = 64;
 struct BaseThreat
 {
-	int X, Y;   //px
+	int X, Y;   //px, the centre of the threat enemies (log)
+	int NPoints;
+	int PX[kBaseThreatMaxPoints];//px, centres of the cells holding threat enemies
+	int PY[kBaseThreatMaxPoints];
+	int PTop[kBaseThreatMaxPoints];//topology area of each, 0xFFFF if none
 	int Time;   //tmtmt when seen
 	bool Seen;
 };
@@ -4917,7 +4938,7 @@ static bool BaseThreatActive(int NI)
 static const int kBaseThreatScanPeriod = 32;    //game steps between two scans of one nation
 static const int kBaseThreatCellShift = 8;      //256 px cells
 static const int kBaseThreatBuildingCells = 6;  //about 1500 px around a building
-static bool ScanBaseThreat(City* CT, int* tx, int* ty, int* count)
+static bool ScanBaseThreat(City* CT, int* tx, int* ty, int* count, BaseThreat* pts)
 {
 	Nation* Nat = CT->Nat;
 	int NI = Nat->NNUM;
@@ -4954,6 +4975,8 @@ static bool ScanBaseThreat(City* CT, int* tx, int* ty, int* count)
 	int n = 0;
 	long long sx = 0;
 	long long sy = 0;
+	static std::vector<byte> enemyAt;
+	enemyAt.assign(G * G, 0);
 	for (int e = 0; e < 8; e++)
 	{
 		if (NATIONS[e].NMask & Nat->NMask)continue;//itself and allies
@@ -4972,10 +4995,20 @@ static bool ScanBaseThreat(City* CT, int* tx, int* ty, int* count)
 			n++;
 			sx += OB->RealX >> 4;
 			sy += OB->RealY >> 4;
+			enemyAt[x + y * G] = 1;
 		}
 	}
 	*count = n;
 	if (n < kBaseThreatMinUnits)return false;
+	pts->NPoints = 0;
+	for (int c = 0; c < G * G && pts->NPoints < kBaseThreatMaxPoints; c++)
+	{
+		if (!enemyAt[c])continue;
+		pts->PX[pts->NPoints] = ((c % G) << kBaseThreatCellShift) + (1 << (kBaseThreatCellShift - 1));
+		pts->PY[pts->NPoints] = ((c / G) << kBaseThreatCellShift) + (1 << (kBaseThreatCellShift - 1));
+		pts->PTop[pts->NPoints] = GetTopology(pts->PX[pts->NPoints], pts->PY[pts->NPoints]);
+		pts->NPoints++;
+	}
 	*tx = int(sx / n);
 	*ty = int(sy / n);
 	return true;
@@ -4993,6 +5026,33 @@ static bool AIPeriodDue(int& last, int period)
 	return false;
 }
 static int g_EngageAt[8];
+//Sends a home soldier to the nearest place holding enemies of the base threat that it can reach. Places behind a
+//wall without a way through or across water are skipped: the soldiers pressed against the wall and stood there.
+//So is a place within kThreatArrivedPx: the soldier stands there with nobody in reach, the enemies have moved
+static const int kThreatArrivedPx = 384;
+static void SendToThreat(OneObject* OB, const BaseThreat& T)
+{
+	int ux = OB->RealX >> 4;
+	int uy = OB->RealY >> 4;
+	int myTop = GetTopology(ux, uy);
+	if (myTop >= 0xFFFE)return;
+	int x = 0, y = 0;
+	int best = -1;
+	for (int p = 0; p < T.NPoints; p++)
+	{
+		int top = T.PTop[p];
+		if (top >= 0xFFFE || (top != myTop && MotionLinks[myTop * NAreas + top] >= 0xFFFE))continue;
+		int d = Norma(T.PX[p] - ux, T.PY[p] - uy);
+		if (d < kThreatArrivedPx)continue;
+		if (best == -1 || d < best)
+		{
+			best = d;
+			x = T.PX[p];
+			y = T.PY[p];
+		}
+	}
+	if (best != -1)OB->NewMonsterSmartSendTo(x, y, 0, 0, 0, 0);
+}
 static int g_BaseScanAt[8];
 
 void City::EngageIdleSoldiers()
@@ -5013,7 +5073,7 @@ void City::EngageIdleSoldiers()
 		{
 			//led by its army (artillery is aimed by SearchEnemyForAIArtillery); artillery near home also comes to
 			//a base threat: otherwise cannons and howitzers stay out of the defence
-			if (NM->Artilery && threat && nearBase && !OB->LocalOrder)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+			if (NM->Artilery && threat && nearBase && !OB->LocalOrder)SendToThreat(OB, T);
 			continue;
 		}
 		if (NM->Building || NM->Peasant || NM->Officer || NM->Baraban || OB->Wall)continue;
@@ -5027,7 +5087,7 @@ void City::EngageIdleSoldiers()
 			if (OB->LocalOrder)continue;
 			word close = SearchVictim(OB, 0, kAIEngageWalkingRadius);
 			if (close != 0xFFFF)OB->AttackObj(close, 128 + 16, 0);
-			else if (threat && nearBase)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+			else if (threat && nearBase)SendToThreat(OB, T);
 			continue;
 		}
 		if (OB->LocalOrder)
@@ -5040,7 +5100,7 @@ void City::EngageIdleSoldiers()
 		word victim = SearchVictim(OB, 0, kAIEngageRadius);
 		if (victim != 0xFFFF)OB->AttackObj(victim, 128 + 16, 0);
 		//low priority: they fight on the way. Fast cavalry waiting for a raid defends too (it stayed out before)
-		else if (threat)OB->NewMonsterSmartSendTo(T.X, T.Y, 0, 0, 0, 0);
+		else if (threat)SendToThreat(OB, T);
 	}
 }
 
@@ -5113,7 +5173,7 @@ bool CheckGateUpXY(int x, int y)
 	return false;
 }
 
-void CreateGates(OneObject* OB);
+bool CreateGates(OneObject* OB);
 void BuildWallLink(OneObject* OB);
 void LeaveMineLink(OneObject* OBJ);
 void BuildWallBrain(Idea* ID)
@@ -7771,7 +7831,8 @@ void CheckDiversants(City* CT)
 }
 
 static int CountArmyType(const Brigade* brigade, int armyType);
-//Fork: grenadier squads (kGrenSquadSize from the raid pool's grenadiers) attack the nearest enemy mine
+//Fork: grenadier squads (kGrenSquadMin to kGrenSquadMax of the raid pool's grenadiers) attack the nearest enemy mine;
+//an enemy wall across the way to it is attacked first (EnemyWallOnWay)
 static const int kGrenSquadPeriod = 64;//game steps
 static OneObject* NearestEnemyMine(City* CT, int x, int y)
 {
@@ -7796,6 +7857,29 @@ static OneObject* NearestEnemyMine(City* CT, int x, int y)
 		}
 	}
 	return best;
+}
+//The first enemy wall cell on the straight way from x, y to the target, nullptr if none; open gates let the squad
+//through and are skipped
+static const int kWallCellPx = 64;//a wall cell (WallCell x, y)
+static const int kWallWayStepPx = 32;
+static OneObject* EnemyWallOnWay(City* CT, int x, int y, OneObject* target)
+{
+	int tx = target->RealX >> 4;
+	int ty = target->RealY >> 4;
+	int steps = Norma(tx - x, ty - y) / kWallWayStepPx;
+	for (int k = 1; k < steps; k++)
+	{
+		int px = x + (tx - x) * k / steps;
+		int py = y + (ty - y) * k / steps;
+		int LI = GetLI(px / kWallCellPx, py / kWallCellPx);
+		if (LI < 0 || LI >= MaxLI)continue;
+		WallCell* W = WRefs[LI];
+		if (!W || W->OIndex == 0xFFFF || (NATIONS[W->NI].NMask & CT->Nat->NMask))continue;
+		if (W->Sprite >= 32 && W->Sprite < 64 && !Gates[W->GateIndex].Locked)continue;
+		OneObject* OB = Group[W->OIndex];
+		if (OB && !OB->Sdoxlo && OB->Wall)return OB;
+	}
+	return nullptr;
 }
 static void DisbandGrenSquad(City* CT, int s)
 {
@@ -7844,24 +7928,26 @@ static void HandleGrenadierSquads(City* CT)
 			DisbandGrenSquad(CT, s);
 			continue;
 		}
+		OneObject* wall = EnemyWallOnWay(CT, sx / n, sy / n, mine);
+		OneObject* target = wall ? wall : mine;
 		for (int j = 0; j < BR->NMemb; j++)
 		{
 			OneObject* OB = Group[BR->Memb[j]];
 			if (!OB || OB->Serial != BR->MembSN[j] || OB->Sdoxlo)continue;
-			if (!OB->LocalOrder || OB->EnemyID != mine->Index)OB->AttackObj(mine->Index, 128 + 16, 0);
+			if (!OB->LocalOrder || OB->EnemyID != target->Index)OB->AttackObj(target->Index, 128 + 16, 0);
 		}
 	}
 	if (!GrenadiersEnabled(CT))return;
 	for (int s = 0; s < kMaxGrenSquads; s++)
 	{
 		if (g_GrenSquad[NI][s])continue;
-		if (CountArmyType(&CT->Agressors, kGrenArmyType) < kGrenSquadSize)return;
+		if (CountArmyType(&CT->Agressors, kGrenArmyType) < kGrenSquadMin)return;
 		int b = CT->GetFreeBrigade();
 		if (b == -1)return;
 		Brigade* BR = CT->Brigs + b;
 		BR->Enabled = true;
 		int moved = 0;
-		for (int j = CT->Agressors.NMemb - 1; j >= 0 && moved < kGrenSquadSize; j--)
+		for (int j = CT->Agressors.NMemb - 1; j >= 0 && moved < kGrenSquadMax; j--)
 		{
 			OneObject* OB = Group[CT->Agressors.Memb[j]];
 			if (!OB || OB->Serial != CT->Agressors.MembSN[j] || ArmType[OB->Usage] != kGrenArmyType)continue;
@@ -7872,6 +7958,433 @@ static void HandleGrenadierSquads(City* CT)
 		AILog_Event(NI, "GREN-SQUAD %d of %d grenadiers leaves for the enemy mines", s + 1, moved);
 #endif
 	}
+}
+
+//Fork: with the "Allow AI to build walls" option (AIWallsState) the AI encloses its base in one stone wall from
+//kWallStartCenters Town Centres on: a square of 2 * kWallHalfSidePx around the city centre. A side that would come
+//within kWallEdgeGapCells of the map edge is left out and the two sides next to it run on to the edge, so the edge
+//closes the enclosure (no wall along the edge and no narrow strip between the wall and the edge). The wall is
+//placed in runs of at most kWallRunCells while fewer than kWallUnbuiltMax placed cells are unfinished, each cell
+//paid when placed, and kept above kWallKeepStone stone. Its own brigade of kWallBuilders peasants builds it.
+//Every kWallGateSpacing cells of a side a finished cell becomes a gate. Open gates let the units of every player
+//through, closed ones nobody: a gate is closed only while enemy soldiers are near (ControlWallGates). Cells where a wall cannot stand (buildings, trees, water, steep ground)
+//are gaps and are tried again later. The plan is not saved: after loading a game it is made again.
+extern byte AIWallsState;
+void OpenGates(OneObject* OB);
+void CloseGates(OneObject* OB);
+static const int kWallStartCenters = 4;
+static const int kWallHalfSidePx = 2 * 2560;  //the square is 4 QHD screens wide (a big base is about 3)
+static const int kWallEdgeGapCells = 12;      //a side closer to the map edge than this is left out
+static const int kWallRunCells = 32;
+static const int kWallUnbuiltMax = 48;
+static const int kWallBuilders = 16;
+static const int kWallBuilderRadiusPx = 20000;
+static const int kWallKeepStone = 10000;      //Town Centres and barracks need stone too
+static const int kWallGateSpacing = 16;       //cells (1024 px) between two gates of a side
+static const int kWallGateEndCells = 3;       //no gate this close to a corner or a side's end
+static const int kWallPeriod = 64;            //game steps
+static const int kWallLogPeriod = 2400;       //game steps, about a minute
+static const int kWallMaxCells = 1024;
+static const int kWallMinRunCells = 8;        //shorter runs wait for stone unless the free stretch is shorter
+//No run is placed with enemy soldiers this close: shooters destroyed the foundations as soon as they were placed,
+//and their stone was lost
+static const int kWallEnemyClearPx = 1536;
+static const byte kWallSpriteHorizontal = 2;  //WallCell::Sprite of a straight cell (GetDir8 & 3)
+static const byte kWallSpriteVertical = 0;
+//Gates close while enemy soldiers are within kGateCloseEnemyPx and open again once none are within
+//kGateOpenEnemyPx; a gate never closes on own units within kGateDoorwayPx (closing gates kill units in them)
+static const int kGateCloseEnemyPx = 300;//only enemies at the gate: a battle near the wall must not shut out reinforcements
+static const int kGateOpenEnemyPx = 450;
+static const int kGateDoorwayPx = 128;
+static const int kWallMaxGates = 64;
+//Gates are checked every kGatePeriod game steps (each AI pass): checked with the rest of the wall work, fast
+//riders crossed the closing distance between two checks and the gate stayed open behind them. Only units within
+//kGateUnitMarginPx of the square are counted
+static const int kGatePeriod = 8;
+static const int kGateUnitMarginPx = 1536;
+struct AIWallPlan
+{
+	bool Made;
+	int N;
+	short X[kWallMaxCells];
+	short Y[kWallMaxCells];
+	byte Side[kWallMaxCells];
+	bool Gate[kWallMaxCells];
+	int Brig;   //brigade index + 1, 0 = none
+	int At;
+	int LogAt;
+	int MinX, MinY, MaxX, MaxY;//px, the square's bounds
+	int NGates;//finished gates (HandleAIWalls), controlled every kGatePeriod steps (HandleAIGates)
+	word GateID[kWallMaxGates];
+	word GateSN[kWallMaxGates];
+	int GateAt;
+	int Closed;
+};
+static AIWallPlan g_Wall[8];
+
+static void AddWallSide(AIWallPlan& P, byte side, int x0, int y0, int x1, int y1)
+{
+	int dx = x1 > x0 ? 1 : x1 < x0 ? -1 : 0;
+	int dy = y1 > y0 ? 1 : y1 < y0 ? -1 : 0;
+	int len = max(abs(x1 - x0), abs(y1 - y0)) + 1;
+	for (int k = 0; k < len && P.N < kWallMaxCells; k++)
+	{
+		P.X[P.N] = short(x0 + dx * k);
+		P.Y[P.N] = short(y0 + dy * k);
+		P.Side[P.N] = side;
+		P.Gate[P.N] = k % kWallGateSpacing == kWallGateSpacing / 2 && k >= kWallGateEndCells && len - 1 - k >= kWallGateEndCells;
+		P.N++;
+	}
+}
+
+static void MakeWallPlan(City* CT, AIWallPlan& P)
+{
+	P.N = 0;
+	int cx = (CT->CenterX << 7) / kWallCellPx;
+	int cy = (CT->CenterY << 7) / kWallCellPx;
+	int h = kWallHalfSidePx / kWallCellPx;
+	int lo = 1;                 //the last cells WallCell::CheckPosition accepts (x < msx / 2): a side running
+	int hiX = (msx >> 1) - 1;   //on to the map edge must reach them, or units pass between it and the edge
+	int hiY = (msy >> 1) - 1;
+	int x0 = cx - h, x1 = cx + h, y0 = cy - h, y1 = cy + h;
+	bool top = y0 - lo >= kWallEdgeGapCells;
+	bool right = hiX - x1 >= kWallEdgeGapCells;
+	bool bottom = hiY - y1 >= kWallEdgeGapCells;
+	bool left = x0 - lo >= kWallEdgeGapCells;
+	if (!left)x0 = lo;
+	if (!right)x1 = hiX;
+	if (!top)y0 = lo;
+	if (!bottom)y1 = hiY;
+	//clockwise; a corner cell belongs to the side before it
+	if (top)AddWallSide(P, 0, x0, y0, x1, y0);
+	if (right)AddWallSide(P, 1, x1, y0 + (top ? 1 : 0), x1, y1);
+	if (bottom)AddWallSide(P, 2, x1 - (right ? 1 : 0), y1, x0, y1);
+	if (left)AddWallSide(P, 3, x0, y1 - (bottom ? 1 : 0), x0, y0 + (top ? 1 : 0));
+	P.MinX = x0 * kWallCellPx;
+	P.MinY = y0 * kWallCellPx;
+	P.MaxX = (x1 + 1) * kWallCellPx;
+	P.MaxY = (y1 + 1) * kWallCellPx;
+	P.NGates = 0;
+	P.Made = true;
+#ifdef AILOG_ENABLED
+	AILog_Event(CT->NI, "WALL-PLAN %d cells, x %d-%d, y %d-%d px; sides:%s%s%s%s (a missing side is at the map edge)",
+		P.N, x0 * kWallCellPx, x1 * kWallCellPx, y0 * kWallCellPx, y1 * kWallCellPx,
+		top ? " top" : "", right ? " right" : "", bottom ? " bottom" : "", left ? " left" : "");
+#endif
+}
+
+static byte WallSideSprite(byte side)
+{
+	return side & 1 ? kWallSpriteVertical : kWallSpriteHorizontal;
+}
+
+//The nation's wall cell at x, y, nullptr if none
+static WallCell* OwnWallCell(byte NI, short x, short y)
+{
+	int LI = GetLI(x, y);
+	if (LI < 0 || LI >= MaxLI)return nullptr;
+	WallCell* W = WRefs[LI];
+	return W && W->NI == NI ? W : nullptr;
+}
+
+//No wall there yet and one can stand there
+static bool WallCellFree(short x, short y, byte sprite)
+{
+	int LI = GetLI(x, y);
+	if (LI < 0 || LI >= MaxLI || WRefs[LI])return false;
+	WallCell C;
+	memset(&C, 0, sizeof(C));
+	C.x = x;
+	C.y = y;
+	C.Sprite = sprite;
+	return C.CheckPosition();
+}
+
+//How many wall cells the stock pays for, keeping kWallKeepStone stone
+static int AffordableWallCells(byte NI, word wid)
+{
+	int cost[8];
+	GetUnitCost(NI, wid, cost);
+	int n = kWallRunCells;
+	for (int i = 0; i < 8; i++)
+	{
+		if (cost[i] <= 0)continue;
+		int have = XRESRC(NI, i) - (i == StoneID ? kWallKeepStone : 0);
+		n = min(n, have > 0 ? have / cost[i] : 0);
+	}
+	return n;
+}
+
+//Enemy soldiers (not peasants) within r px of x, y
+static bool EnemySoldiersNear(City* CT, int x, int y, int r)
+{
+	for (int e = 0; e < 8; e++)
+	{
+		if (NATIONS[e].NMask & CT->Nat->NMask)continue;//itself and allies
+		int N = NtNUnits[e];
+		word* units = NatList[e];
+		for (int i = 0; i < N; i++)
+		{
+			if (units[i] == 0xFFFF)continue;
+			OneObject* OB = Group[units[i]];
+			if (!OB || OB->Sdoxlo || OB->NewBuilding || OB->Wall || OB->newMons->Peasant)continue;
+			if (Norma((OB->RealX >> 4) - x, (OB->RealY >> 4) - y) < r)return true;
+		}
+	}
+	return false;
+}
+
+//Places the first run of free cells (one side, at most maxCells) with no enemy soldiers near; returns the cells placed
+static int PlaceWallRun(City* CT, AIWallPlan& P, word wid, int maxCells)
+{
+	byte NI = CT->NI;
+	int a = 0;
+	int stretch = 0;//free cells in a row from a, on its side
+	for (;; a += stretch)
+	{
+		while (a < P.N && !WallCellFree(P.X[a], P.Y[a], WallSideSprite(P.Side[a])))a++;
+		if (a == P.N)return 0;
+		stretch = 1;
+		while (a + stretch < P.N && stretch < kWallRunCells && P.Side[a + stretch] == P.Side[a] &&
+			WallCellFree(P.X[a + stretch], P.Y[a + stretch], WallSideSprite(P.Side[a + stretch])))stretch++;
+		int m = a + stretch / 2;
+		if (!EnemySoldiersNear(CT, P.X[m] * kWallCellPx + kWallCellPx / 2, P.Y[m] * kWallCellPx + kWallCellPx / 2, kWallEnemyClearPx))break;
+	}
+	int n = min(stretch, min(maxCells, AffordableWallCells(NI, wid)));
+	if (n <= 0 || n < min(stretch, kWallMinRunCells))return 0;
+	int b = a + n - 1;
+	NewMonster* NM = CT->Nat->Mon[wid]->newMons;
+	WallCluster WC;
+	WC.NI = NI;
+	WC.Type = NM->Sprite;
+	WC.NIndex = wid;
+	WC.NM = NM;
+	WC.ConnectToPoint(P.X[a], P.Y[a]);
+	WC.ConnectToPoint(P.X[b], P.Y[b]);
+	WC.CreateSprites();
+	//a straight piece of the side even where a run ends: the end sprites of a run (a lone cell is a pillar) left
+	//the wall jagged, and a gate needs straight neighbours (CheckGateUpgrade)
+	for (int i = 0; i < WC.NCells; i++)WC.Cells[i].Sprite = WallSideSprite(P.Side[a]);
+	WSys.AddCluster(&WC);
+	int placed = 0;
+	for (int i = a; i <= b; i++)if (OwnWallCell(NI, P.X[i], P.Y[i]))placed++;
+	return placed;
+}
+
+static void DisbandWallBuilders(City* CT, AIWallPlan& P)
+{
+	if (!P.Brig)return;
+	Brigade* BR = CT->Brigs + (P.Brig - 1);
+	if (BR->Enabled)
+	{
+		BR->Rospusk();
+		BR->DeleteAll();
+		BR->Enabled = false;
+	}
+	P.Brig = 0;
+}
+
+//Keeps kWallBuilders peasants in the wall brigade and sends the idle ones to the nearest unfinished cell
+//nobody else is sent to
+static int KeepWallBuilders(City* CT, AIWallPlan& P)
+{
+	if (P.Brig && !CT->Brigs[P.Brig - 1].Enabled)P.Brig = 0;
+	if (!P.Brig)
+	{
+		int b = CT->GetFreeBrigade();
+		if (b == -1)return 0;
+		CT->Brigs[b].Enabled = true;
+		P.Brig = b + 1;
+	}
+	Brigade* BR = CT->Brigs + (P.Brig - 1);
+	if (BR->NMemb < kWallBuilders)
+	{
+		BrigMemb BM;
+		memset(&BM, 0, sizeof(BM));
+		BM.Peons = kWallBuilders - BR->NMemb;
+		BR->AddInRadius(CT->CenterX << 7, CT->CenterY << 7, kWallBuilderRadiusPx, &BM);
+	}
+	static bool taken[kWallMaxCells];
+	memset(taken, 0, sizeof(taken));
+	int builders = 0;
+	for (int j = 0; j < BR->NMemb; j++)
+	{
+		if (BR->Memb[j] == 0xFFFF)continue;
+		OneObject* OB = Group[BR->Memb[j]];
+		if (!OB || OB->Serial != BR->MembSN[j] || OB->Sdoxlo)continue;
+		builders++;
+		OB->DoNotCall = true;//no other AI work takes it
+		if (OB->LocalOrder && OB->LocalOrder->DoLink == &BuildWallLink)continue;
+		int best = -1;
+		int bestD = 0;
+		for (int i = 0; i < P.N; i++)
+		{
+			if (taken[i])continue;
+			WallCell* W = OwnWallCell(CT->NI, P.X[i], P.Y[i]);
+			if (!W || W->Health >= W->MaxHealth)continue;
+			int d = Norma(P.X[i] * kWallCellPx + kWallCellPx / 2 - (OB->RealX >> 4), P.Y[i] * kWallCellPx + kWallCellPx / 2 - (OB->RealY >> 4));
+			if (best == -1 || d < bestD)
+			{
+				best = i;
+				bestD = d;
+			}
+		}
+		if (best == -1)continue;
+		taken[best] = true;
+		OB->BuildWall(P.X[best], P.Y[best], 128, 0, false);
+	}
+	return builders;
+}
+
+static WallCell* GateCell(OneObject* OB)
+{
+	int LI = GetLI(OB->WallX, OB->WallY);
+	return LI >= 0 && LI < MaxLI ? WRefs[LI] : nullptr;
+}
+
+//Closes the gates with enemy soldiers near (not on own units in the doorway) and opens the others; returns the
+//number of closed gates
+static int ControlWallGates(City* CT, const AIWallPlan& P, OneObject** gateOB, int n)
+{
+	if (!n)return 0;
+	bool enemyClose[kWallMaxGates] = {};
+	bool enemyNear[kWallMaxGates] = {};
+	bool ownInDoor[kWallMaxGates] = {};
+	for (int e = 0; e < 8; e++)
+	{
+		bool own = e == CT->NI;
+		if (!own && (NATIONS[e].NMask & CT->Nat->NMask))continue;//allies
+		int N = NtNUnits[e];
+		word* units = NatList[e];
+		for (int u = 0; u < N; u++)
+		{
+			if (units[u] == 0xFFFF)continue;
+			OneObject* OB = Group[units[u]];
+			if (!OB || OB->Sdoxlo || OB->NewBuilding || OB->Wall)continue;
+			if (!own && OB->newMons->Peasant)continue;
+			int x = OB->RealX >> 4;
+			int y = OB->RealY >> 4;
+			if (x < P.MinX - kGateUnitMarginPx || x > P.MaxX + kGateUnitMarginPx ||
+				y < P.MinY - kGateUnitMarginPx || y > P.MaxY + kGateUnitMarginPx)continue;
+			for (int g = 0; g < n; g++)
+			{
+				int d = Norma(x - (gateOB[g]->RealX >> 4), y - (gateOB[g]->RealY >> 4));
+				if (own)
+				{
+					if (d < kGateDoorwayPx)ownInDoor[g] = true;
+				}
+				else if (d < kGateOpenEnemyPx)
+				{
+					enemyNear[g] = true;
+					if (d < kGateCloseEnemyPx)enemyClose[g] = true;
+				}
+			}
+		}
+	}
+	int closed = 0;
+	for (int g = 0; g < n; g++)
+	{
+		WallCell* W = GateCell(gateOB[g]);
+		if (!W)continue;
+		bool locked = Gates[W->GateIndex].Locked != 0;
+		if (!locked && enemyClose[g] && !ownInDoor[g])
+		{
+			CloseGates(gateOB[g]);
+			locked = true;
+#ifdef AILOG_ENABLED
+			AILog_Event(CT->NI, "WALL-GATE closed at %d,%d: enemies near", gateOB[g]->RealX >> 4, gateOB[g]->RealY >> 4);
+#endif
+		}
+		else if (locked && !enemyNear[g])
+		{
+			OpenGates(gateOB[g]);
+			locked = false;
+		}
+		if (locked)closed++;
+	}
+	return closed;
+}
+
+//Closes and opens the gates found by HandleAIWalls (ControlWallGates)
+static void HandleAIGates(City* CT)
+{
+	AIWallPlan& P = g_Wall[CT->NI];
+	if (!P.Made || !P.NGates || !AIPeriodDue(P.GateAt, kGatePeriod))return;
+	OneObject* gateOB[kWallMaxGates];
+	int n = 0;
+	for (int g = 0; g < P.NGates; g++)
+	{
+		OneObject* OB = Group[P.GateID[g]];
+		if (OB && OB->Serial == P.GateSN[g] && !OB->Sdoxlo && OB->Wall)gateOB[n++] = OB;
+	}
+	P.Closed = ControlWallGates(CT, P, gateOB, n);
+}
+
+static void HandleAIWalls(City* CT)
+{
+	byte NI = CT->NI;
+	AIWallPlan& P = g_Wall[NI];
+	if (tmtmt < P.At)//a new or loaded game
+	{
+		P.Made = false;
+		P.Brig = 0;
+		P.LogAt = 0;
+		P.NGates = 0;
+		P.Closed = 0;
+	}
+	if (!AIPeriodDue(P.At, kWallPeriod))return;
+	Nation* NT = CT->Nat;
+	word wid = NT->UID_WALL;
+	if (!AIWallsState || wid >= NT->NMon || !NT->Mon[wid]->newMons->Wall || !NT->Mon[wid]->Enabled)return;
+	if (!P.Made)
+	{
+		if (CountCenters(NT) < kWallStartCenters)return;
+		MakeWallPlan(CT, P);
+	}
+	int placed = 0, finished = 0, gates = 0;
+	bool gateMade = false;
+	P.NGates = 0;
+	for (int i = 0; i < P.N; i++)
+	{
+		WallCell* W = OwnWallCell(NI, P.X[i], P.Y[i]);
+		if (!W)continue;
+		placed++;
+		if (W->Health < W->MaxHealth)continue;
+		finished++;
+		if (!P.Gate[i] || W->OIndex == 0xFFFF)continue;
+		OneObject* OB = Group[W->OIndex];
+		if (!OB || OB->Sdoxlo)continue;
+		if (W->Sprite >= 32 && W->Sprite < 64)
+		{
+			gates++;
+			if (P.NGates < kWallMaxGates)
+			{
+				P.GateID[P.NGates] = OB->Index;
+				P.GateSN[P.NGates] = OB->Serial;
+				P.NGates++;
+			}
+		}
+		else if (!gateMade && !W->SprBase && W->Sprite <= 3 && CheckGateUpgrade(OB) &&
+			XRESRC(NI, StoneID) >= WChar[W->Type].GateCost[StoneID] + kWallKeepStone)
+		{
+			gateMade = CreateGates(OB);//one per period; ControlWallGates opens it when it is ready
+		}
+	}
+	int unfinished = placed - finished;
+	if (unfinished < kWallUnbuiltMax && placed < P.N)
+	{
+		int n = PlaceWallRun(CT, P, wid, kWallUnbuiltMax - unfinished);
+		placed += n;
+		unfinished += n;
+	}
+	int builders = 0;
+	if (unfinished)builders = KeepWallBuilders(CT, P);
+	else DisbandWallBuilders(CT, P);
+#ifdef AILOG_ENABLED
+	if (AIPeriodDue(P.LogAt, kWallLogPeriod))
+		AILog_Event(NI, "WALL-STATE %d of %d cells placed, %d finished, %d gates (%d closed), %d builders; %d stone",
+			placed, P.N, finished, gates, P.Closed, builders, int(XRESRC(NI, StoneID)));
+#endif
 }
 
 //------------------------------MAIN STRATEGICAL BRAIN---------------------------//
@@ -7967,15 +8480,22 @@ void SmartGamer(City* CT)
 	//-------------------------------------
 	if (RaidsEnabled(CT))CheckDiversants(CT);
 	HandleGrenadierSquads(CT);
+	HandleAIWalls(CT);
+	HandleAIGates(CT);
 	//Fork: the base threat is counted unit by unit (ScanBaseThreat), every kBaseThreatScanPeriod steps
 	if (CT->AI_TOWN_DEFENCE && AIPeriodDue(g_BaseScanAt[CT->NI], kBaseThreatScanPeriod))
 	{
 		int tx, ty, n;
-		if (ScanBaseThreat(CT, &tx, &ty, &n))
+		static BaseThreat scan;
+		if (ScanBaseThreat(CT, &tx, &ty, &n, &scan))
 		{
 			//need to protect base;
 			CT->FreeArmy.RemoveObjects(CT->FreeArmy.NMemb, &CT->Defenders);
 			BaseThreat& T = g_BaseThreat[CT->NI];
+			T.NPoints = scan.NPoints;
+			memcpy(T.PX, scan.PX, sizeof(T.PX));
+			memcpy(T.PY, scan.PY, sizeof(T.PY));
+			memcpy(T.PTop, scan.PTop, sizeof(T.PTop));
 #ifdef AILOG_ENABLED
 			if (!T.Seen || tmtmt - T.Time >= kBaseThreatSteps)
 				AILog_Event(CT->NI, "BASE-THREAT %d enemies at the base, %d px from the Town Centre: the home army answers",

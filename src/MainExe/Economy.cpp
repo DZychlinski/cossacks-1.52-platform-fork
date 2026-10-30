@@ -231,6 +231,12 @@ void Economy::Load()
 
 Economy ECO;
 
+//Fork: the engine resource ID (TreeID, StoneID, ...) of a market resource index (as PerformTorg takes them)
+int EcoResEngineID( byte EcoRes )
+{
+	return EcoRes < 6 ? ECO.EcResID[EcoRes] : -1;
+}
+
 void ReloadECO()
 {
 	ECO.Load();

@@ -323,6 +323,8 @@ void Upgrades(){
 	if(UpgIsRun(&AKAFOOD2)) 
 		TryUpgrade(&AKAFOOD3, 100, 100);
 	TryUpgrade(&AKASTN2, 92, 100);
+	// Fork: both stone upgrades (AKASTN1 +100%, AKASTN2 +300%): stone pays for walls, towers and Town Centres
+	TryUpgrade(&AKASTN1, 92, 100);
 	TryUpgrade(&MELN_U1, 98, 100);
 
 	if(GetUnits(&STABLE))
@@ -957,8 +959,7 @@ void ProcurementScript(){
 	if(GetUnits(&DIPCENTER))
 		TryUpgrade(&AKAFOOD4, 100, 100);
 
-	if(!UpgIsDone(&AKASTN2))
-		TryUpgrade(&AKASTN1, 20, 100);
+	TryUpgrade(&AKASTN1, 92, 100); // Fork: also once AKASTN2 is done
 	
 
 	// рыбалка

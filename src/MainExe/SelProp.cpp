@@ -1972,6 +1972,34 @@ void LoadMessagesFromFile( char* Name )
 	Gclose( f );
 }
 
+//Fork: texts of the fork's own lobby options; a text file (or a mod) that defines the same ID wins
+static const char* const kForkDefaultMessages[][2] = {
+	{ "GMTP_TP11", "Allow AI to build walls" },
+	{ "@GMTP_TP11_00", "No" },
+	{ "@GMTP_TP11_01", "Yes" },
+};
+
+static void AddForkDefaultMessages()
+{
+	for (const auto& m : kForkDefaultMessages)
+	{
+		bool known = false;
+		for (int i = 0; i < NMess && !known; i++)known = !strcmp( GMessIDS[i], m[0] );
+		if (known)continue;
+		if (NMess >= MaxMess)
+		{
+			MaxMess += 256;
+			GMessIDS = (lpCHAR*) realloc( GMessIDS, MaxMess * sizeof(lpCHAR) );
+			GMessage = (lpCHAR*) realloc( GMessage, MaxMess * sizeof(lpCHAR) );
+		}
+		GMessIDS[NMess] = new char[strlen( m[0] ) + 1];
+		GMessage[NMess] = new char[strlen( m[1] ) + 1];
+		strcpy( GMessIDS[NMess], m[0] );
+		strcpy( GMessage[NMess], m[1] );
+		NMess++;
+	}
+}
+
 void LoadMessages()
 {
 	LoadMessagesFromFile( "Comment.txt" );
@@ -2010,6 +2038,7 @@ void LoadMessages()
 		} while (good);
 	};
 	LoadMessagesFromFile( "moretx.dat" );
+	AddForkDefaultMessages();
 	LoadConstStr();
 }
 

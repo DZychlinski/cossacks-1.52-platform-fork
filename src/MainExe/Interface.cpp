@@ -3279,6 +3279,7 @@ bool MPL_WaitingGame(bool Host, bool SINGLE)
 	ADD_OPT->AddLine(GetTextByID("GMTP_TP8"));
 	ADD_OPT->AddLine(GetTextByID("GMTP_TP9"));
 	ADD_OPT->AddLine(GetTextByID("GMTP_TP10"));
+	ADD_OPT->AddLine(GetTextByID("GMTP_TP11"));
 
 	ADD_OPT_VAL = MENU.addGP_ComboBoxDLX(nullptr, 633 - 65 - 64 + 26, 161 + 26 * 7, 100 + 100 + 64 - 26, LONGBOX.GPID, 0, 0, 0, &WhiteFont, &YellowFont, nullptr);
 
@@ -3582,7 +3583,7 @@ ffe2:
 	}
 
 	//Total number of additional game options for random map / deathmatch
-	const int kNumberOfAdditionalOptions = 10;
+	const int kNumberOfAdditionalOptions = 11;
 
 	//Selected values for each game option
 	//[0] Start Options
@@ -3595,12 +3596,14 @@ ffe2:
 	//[7] Diplomatic Centre Options
 	//[8] Shipyard Options
 	//[9] Market Options
+	//[10] Allow AI to build walls (Fork, PlayerInfo::AIWalls)
+	//[9] Market Options
 	int selected_opt_values[kNumberOfAdditionalOptions + 1] = { 0 };//+'\0'?
 
 	GFILE* F = Gopen("MuliExOpt.dat", "r");
 	if (F)
 	{
-		Gscanf(F, "%d%d%d%d%d%d%d%d%d%d",
+		Gscanf(F, "%d%d%d%d%d%d%d%d%d%d%d",
 			selected_opt_values,
 			selected_opt_values + 1,
 			selected_opt_values + 2,
@@ -3611,7 +3614,7 @@ ffe2:
 			selected_opt_values + 7,
 			selected_opt_values + 8,
 			selected_opt_values + 9,
-			selected_opt_values + 10//Sort of '\0'?
+			selected_opt_values + 10
 		);
 		Gclose(F);
 	}
@@ -4132,9 +4135,13 @@ ffe2:
 							{//Compatibility with old memory layout (see comment to PlayerInfo)
 								PINFO[HostID].UserParam[i] = selected_opt_values[i];
 							}
-							else
+							else if (i < 10)
 							{
 								PINFO[HostID].UserParam2[i - 7] = selected_opt_values[i];
+							}
+							else
+							{
+								PINFO[HostID].AIWalls = selected_opt_values[i];
 							}
 						}
 
@@ -4829,9 +4836,13 @@ ffe2:
 							{//Compatibility with old memory layout (see comment to PlayerInfo)
 								param = PINFO[HostID].UserParam[i];
 							}
-							else
+							else if (i < 10)
 							{
 								param = PINFO[HostID].UserParam2[i - 7];
+							}
+							else
+							{
+								param = PINFO[HostID].AIWalls;
 							}
 
 							if (param != selected_opt_values[i])
@@ -5329,7 +5340,7 @@ ffe2:
 		int r = GetLastError();
 		if (F)
 		{
-			Gprintf(F, "%d %d %d %d %d %d %d %d %d %d",
+			Gprintf(F, "%d %d %d %d %d %d %d %d %d %d %d",
 				selected_opt_values[0],
 				selected_opt_values[1],
 				selected_opt_values[2],
@@ -5340,7 +5351,7 @@ ffe2:
 				selected_opt_values[7],
 				selected_opt_values[8],
 				selected_opt_values[9],
-				selected_opt_values[10] //Sort of '\0'?
+				selected_opt_values[10]
 			);
 			Gclose(F);
 		}
@@ -12162,6 +12173,7 @@ extern byte SaveState;
 extern byte DipCentreState;
 extern byte ShipyardState;
 extern byte MarketState;
+extern byte AIWallsState;
 
 void GetOptionsFromMap(char* Name)
 {
@@ -12196,6 +12208,7 @@ void GetOptionsFromMap(char* Name)
 			DipCentreState = option_values[7];
 			ShipyardState = option_values[8];
 			MarketState = option_values[9];
+			AIWallsState = option_values[10];
 		}
 	}
 }
@@ -12249,7 +12262,7 @@ void PrepareGameMedia(byte myid, bool SaveNR)
 
 	PrepareToGame();
 
-	int RD_VERSION = 103;//102: PlayerInfo has InsaneAI appended; 103: and ModsHash
+	int RD_VERSION = 104;//102: PlayerInfo has InsaneAI appended; 103: and ModsHash; 104: and AIWalls
 	//RUN DATA
 	RunMethod = 0xFFFFFFFE;
 	RunData[0] = RD_VERSION;//version of the run data

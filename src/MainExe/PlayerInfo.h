@@ -51,4 +51,5 @@ struct PlayerInfo
 	int speed_mode;
 	byte InsaneAI;//Boolean "Insane AI" option, appended for protocol compatibility
 	unsigned int ModsHash;//cos_mods_hash() of this player's active mods, 0 = none; must match the host's to start
+	byte AIWalls;//11th additional option "Allow AI to build walls" (UserParam2 is full), appended for protocol compatibility
 };

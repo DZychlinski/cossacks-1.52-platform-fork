@@ -5565,6 +5565,7 @@ void CmdTorg( byte NI, byte SellRes, byte BuyRes, int SellAmount );
 byte INVECO[6] = { 2,5,4,0,1,3 };
 
 void PerformTorg( byte Nation, byte SellRes, byte BuyRes, int SellAmount );
+int EcoResEngineID( byte EcoRes );
 
 //Performs market exchange for bots
 int ForkLimitAISale( City* CT, int SellRes, int BuyRes, int SellAmount );//Megapolis.cpp
@@ -5572,7 +5573,8 @@ extern "C" __declspec( dllexport ) void AI_Torg( byte SellRes, byte BuyRes, int 
 {
 	if ( AiIsRunNow )
 	{
-		SellAmount = ForkLimitAISale( CCIT, INVECO[SellRes], INVECO[BuyRes], SellAmount );
+		//Fork: ForkLimitAISale takes engine resource IDs; INVECO gives market indices (it compared those with StoneID etc.)
+		SellAmount = ForkLimitAISale( CCIT, EcoResEngineID( INVECO[SellRes] ), EcoResEngineID( INVECO[BuyRes] ), SellAmount );
 		if ( SellAmount <= 0 )
 		{
 			return;

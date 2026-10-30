@@ -760,10 +760,49 @@ void CreateFullPath(int x1, int y1, OneObject* OB)
 	}
 }
 
+//Fork: CreatePrePath* draw the straight line to the target point by point into pxx/pyy (MaxP + 160 points) with no
+//length check. A target outside the map made the line longer, ran past the arrays and overwrote the globals after
+//them (the unit counts per cell, MCount: a crash a few seconds later). The target is clamped into the lock map and
+//the line to kPathMaxLine points; the first kPathBadTargetLog cases are written to dmcr_crash.log (unit, order).
+static const int kPathMaxLine = MaxP;
+static const int kPathBadTargetLog = 20;
+static int g_PathBadTargets = 0;
+static void ClampPathTarget(OneObject* OB, int& x1, int& y1)
+{
+	int cx = x1 < 0 ? 0 : x1 >= MAPSX ? MAPSX - 1 : x1;
+	int cy = y1 < 0 ? 0 : y1 >= MAPSY ? MAPSY - 1 : y1;
+	int dx = cx - OB->x;
+	int dy = cy - OB->y;
+	int len = max(abs(dx), abs(dy));
+	if (len > kPathMaxLine)
+	{
+		cx = OB->x + int((long long)dx * kPathMaxLine / len);
+		cy = OB->y + int((long long)dy * kPathMaxLine / len);
+	}
+	if (cx == x1 && cy == y1)return;
+	if (g_PathBadTargets < kPathBadTargetLog)
+	{
+		g_PathBadTargets++;
+		FILE* f = fopen("dmcr_crash.log", "a");
+		if (f)
+		{
+			Order1* OR1 = OB->LocalOrder;
+			uintptr_t base = (uintptr_t)GetModuleHandleA(NULL);
+			fprintf(f, "[PATH-TARGET] unit #%d %s of P%d at %d,%d: target %d,%d outside the map (%dx%d), clamped to %d,%d; order %d link exe+0x%lx\n",
+				OB->Index, OB->Ref.General->Message, OB->NNUM, OB->x, OB->y, x1, y1, MAPSX, MAPSY, cx, cy,
+				OR1 ? int(OR1->OrderType) : -1, OR1 ? (unsigned long)((uintptr_t)OR1->DoLink - base) : 0ul);
+			fclose(f);
+		}
+	}
+	x1 = cx;
+	y1 = cy;
+}
+
 #define sssh 1
 extern int COUNTER;
 bool OneObject::CreatePrePath(int x1, int y1)
 {
+	ClampPathTarget(this, x1, y1);
 	AllowPathDelay = false;
 	if (LockType == 1) {
 		return CreatePrePath2(x1, y1);
@@ -1368,6 +1407,7 @@ bool OneObject::CreatePrePath(int x1, int y1)
 #undef sssh
 #define sssh 2
 bool OneObject::CreatePrePath2(int x1, int y1) {
+	ClampPathTarget(this, x1, y1);
 	if (PathDelay)return false;
 	if (abs(x - x1) < 2 && abs(y - y1) < 2)return false;
 	MotionField* MFI = &MFIELDS[LockType];
@@ -1900,6 +1940,7 @@ bool OneObject::CreatePrePath2(int x1, int y1) {
 #undef sssh
 #define sssh 3
 bool OneObject::CreatePrePath4(int x1, int y1) {
+	ClampPathTarget(this, x1, y1);
 	if (PathDelay)return false;
 	if (abs(x - x1) < 2 && abs(y - y1) < 2)return false;
 	MotionField* MFI = &MFIELDS[LockType];

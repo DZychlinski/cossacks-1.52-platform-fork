@@ -426,6 +426,7 @@ int CURTMTMT = 0;
 
 extern byte BalloonState;
 extern byte CannonState;
+extern byte AIWallsState;
 extern byte NoArtilleryState;
 extern byte XVIIIState;
 extern byte CaptState;
@@ -498,6 +499,7 @@ void UnLoading()
 	CannonState = 0;
 	XVIIIState = 0;
 	CaptState = 0;
+	AIWallsState = 0;
 	SaveState = 2;
 	GameTime = 0;
 	CURTMTMT = 0;
@@ -1046,6 +1048,20 @@ bool LoadNations( SaveBuf* SB )
 		xBlockRead( SB, &NtMaxUnits[tt], 4 );
 		NatList[tt] = new word[NtMaxUnits[tt]];
 		xBlockRead( SB, NatList[tt], 2 * NtNUnits[tt] );
+		if ( tt == 7 )
+		{
+			int ForkDedupNatLists();
+			int removed = ForkDedupNatLists();//Fork: a unit listed twice moves twice as fast
+			if ( removed )
+			{
+				FILE* f = fopen( "dmcr_crash.log", "a" );
+				if ( f )
+				{
+					fprintf( f, "[NATLIST] loaded game: %d repeated unit list entries removed\n", removed );
+					fclose( f );
+				}
+			}
+		}
 		xBlockRead( SB, NT->NKilled, NT->NMon * 2 );
 		xBlockRead( SB, NT->ResTotal, 32 );
 		xBlockRead( SB, NT->ResOnMines, 32 );
@@ -3036,6 +3052,7 @@ void PreSaveGame( SaveBuf* SB, char* Messtr, int ID )
 	xBlockWrite( SB, &DipCentreState, 1 );
 	xBlockWrite( SB, &ShipyardState, 1 );
 	xBlockWrite( SB, &MarketState, 1 );
+	xBlockWrite( SB, &AIWallsState, 1 );
 
 	byte NN = MyNation;
 	xBlockWrite( SB, &NN, 8 );
@@ -3251,6 +3268,7 @@ void SFLB_PreLoadGame( SaveBuf* SB, bool LoadNation )
 	xBlockRead( SB, &DipCentreState, 1 );
 	xBlockRead( SB, &ShipyardState, 1 );
 	xBlockRead( SB, &MarketState, 1 );
+	xBlockRead( SB, &AIWallsState, 1 );
 
 	if (LoadNation)
 	{

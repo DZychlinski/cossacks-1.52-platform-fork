@@ -5984,7 +5984,8 @@ void SearchArmyLink(OneObject* OBJ)
 		if (top1 != top0)
 		{
 			top1 = MotionLinks[top0 + top1 * NAreas];
-			Area* AR = TopMap + top1;
+			//Fork: 0xFFFF = no way to the army (a closed gate, water); TopMap + 0xFFFF read far past the area table
+			Area* AR = top1 < 0xFFFE ? TopMap + top1 : nullptr;
 			if (!AR)
 			{
 				OBJ->DestX = 0;

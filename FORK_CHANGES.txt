@@ -11,3 +11,5 @@ Each new chat message shows the last 10 chat messages again.
 Upgrades being researched in your buildings are listed at the top right with percent done.
 Unit counts over icons (selected units, formations, units in a mine) show numbers up to 9999 instead of the infinity sign.
 A loaded game keeps its capture option (before, everything could be captured after loading). Older saves do not load.
+New lobby option "Allow AI to build walls" (additional options, off by default). Lobbies and recordings of older versions are incompatible.
+Fixed crashes in long games: units sent to a place outside the map, and units that could not reach their army behind a closed gate.

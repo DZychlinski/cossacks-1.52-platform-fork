@@ -16,6 +16,9 @@
 #include "MapSprites.h"
 #include <assert.h>
 #include "GP_Draw.h"
+#include <intrin.h>
+#include <vector>
+extern int tmtmt;
 int mul3( int );
 
 void GetRect( OneObject* ZZ, int* x, int* y, int* Lx, int* Ly );
@@ -299,10 +302,77 @@ void InitNatList()
 	SetupNatList();
 }
 
+//Fork: LongProcesses runs a unit's order and motion once per entry in its nation's list, so a unit listed twice
+//moved twice as fast (seen: cavalry and peasants of a computer player running three times their speed). A unit
+//already in its own nation's list is not added again; an entry left in another nation's list is removed. The
+//first kNatListLogMax cases go to dmcr_crash.log with the calling code (exe-relative, for llvm-symbolizer)
+static const int kNatListLogMax = 20;
+static int g_NatListLogged = 0;
+static void LogNatList( const char* what, word ID, int NNUM, void* caller )
+{
+	if ( g_NatListLogged >= kNatListLogMax )return;
+	g_NatListLogged++;
+	FILE* f = fopen( "dmcr_crash.log", "a" );
+	if ( !f )return;
+	OneObject* OB = Group[ID];
+	fprintf( f, "[NATLIST] %s: unit #%d %s, list of P%d, caller exe+0x%lx (tmtmt %d)\n", what, ID,
+		OB ? OB->Ref.General->Message : "-", NNUM, (unsigned long)( (uintptr_t)caller - (uintptr_t)GetModuleHandleA( NULL ) ), tmtmt );
+	fclose( f );
+}
+static bool ForkNatListAlready( word ID, int NNUM, void* caller )
+{
+	bool listed = false;
+	for ( int n = 0; n < 8; n++ )
+	{
+		word* L = NatList[n];
+		for ( int j = 0; j < NtNUnits[n]; j++ )
+		{
+			if ( L[j] != ID )continue;
+			if ( n == NNUM && !listed )
+			{
+				listed = true;
+				LogNatList( "added again", ID, n, caller );
+				continue;
+			}
+			LogNatList( n == NNUM ? "listed twice" : "left in another nation's list", ID, n, caller );
+			memmove( L + j, L + j + 1, ( NtNUnits[n] - j - 1 ) * 2 );
+			NtNUnits[n]--;
+			j--;
+		}
+	}
+	return listed;
+}
+
+//Fork: removes repeated entries from every nation's list (saved games may hold them); returns how many
+int ForkDedupNatLists()
+{
+	static std::vector<byte> seen;
+	int removed = 0;
+	for ( int n = 0; n < 8; n++ )
+	{
+		seen.assign( 0x10000, 0 );
+		word* L = NatList[n];
+		int k = 0;
+		for ( int j = 0; j < NtNUnits[n]; j++ )
+		{
+			if ( seen[L[j]] )
+			{
+				removed++;
+				continue;
+			}
+			seen[L[j]] = 1;
+			L[k++] = L[j];
+		}
+		NtNUnits[n] = k;
+	}
+	return removed;
+}
+
 void AddObject( OneObject* OB )
 {
 	word ID = OB->Index;
 	word NNUM = OB->NNUM;
+	if ( ForkNatListAlready( ID, NNUM, _ReturnAddress() ) )return;
 
 	if (NtNUnits[NNUM] == NtMaxUnits[NNUM])
 	{

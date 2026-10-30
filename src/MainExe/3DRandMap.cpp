@@ -3400,6 +3400,7 @@ byte SaveState = 2;
 byte DipCentreState = 0;
 byte ShipyardState = 0;
 byte MarketState = 0;
+byte AIWallsState = 0;//Fork: "Allow AI to build walls" option, 1 = yes
 
 int DecodeOptionsFromNumber(const int number, int* result);
 
@@ -3693,6 +3694,7 @@ bool CreateRandomTerrain(char* Name, int NPlay, int MountStyle,
 		DipCentreState = option_values[7];
 		ShipyardState = option_values[8];
 		MarketState = option_values[9];
+		AIWallsState = option_values[10];
 
 		switch (peace_time_opt)
 		{

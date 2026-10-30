@@ -510,9 +510,11 @@ extern int RM_Restot;
 
 static int ReadRecordedPlayerInfo( int recordingVersion, int offset )
 {
-	//PlayerInfo grew over time: 101 and older lack InsaneAI (1 byte), 102 lacks ModsHash (4 bytes)
-	const int packedPlayerInfoSize = recordingVersion >= 103 ? sizeof(PlayerInfo)
-		: recordingVersion == 102 ? sizeof(PlayerInfo) - 4 : sizeof(PlayerInfo) - 5;
+	//PlayerInfo grew over time: 101 and older lack InsaneAI (1 byte), 102 lacks ModsHash (4 bytes), 103 lacks
+	//AIWalls (1 byte; the option itself is in the map name)
+	const int packedPlayerInfoSize = recordingVersion >= 104 ? sizeof(PlayerInfo)
+		: recordingVersion == 103 ? sizeof(PlayerInfo) - 1
+		: recordingVersion == 102 ? sizeof(PlayerInfo) - 5 : sizeof(PlayerInfo) - 6;
 
 	memset( PINFO, 0, sizeof(PINFO) );
 	for (int i = 0; i < 8; i++)
